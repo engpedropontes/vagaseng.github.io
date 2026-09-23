@@ -12,8 +12,13 @@ const crypto = require('crypto');
 
 const PORT = process.env.PORT || 3000;
 const ADMIN_SENHA = process.env.ADMIN_SENHA || '8769';
-const DATA_FILE = process.env.DATA_FILE || path.join(__dirname, 'data', 'db.json');
-const PUBLIC_DIR = path.join(__dirname, 'public');
+// No Railway, o volume é detectado sozinho (variável RAILWAY_VOLUME_MOUNT_PATH)
+const DATA_FILE = process.env.DATA_FILE
+  || (process.env.RAILWAY_VOLUME_MOUNT_PATH && path.join(process.env.RAILWAY_VOLUME_MOUNT_PATH, 'db.json'))
+  || path.join(__dirname, 'data', 'db.json');
+// Aceita o index.html dentro de /public ou solto na raiz (caso o upload tenha perdido a pasta)
+const PUBLIC_DIR = fs.existsSync(path.join(__dirname, 'public', 'index.html')) ? path.join(__dirname, 'public') : __dirname;
+if (!fs.existsSync(path.join(PUBLIC_DIR, 'index.html'))) console.error('ATENÇÃO: index.html não encontrado. Envie a pasta public com o index.html.');
 
 // ---------------------------------------------------------------- dados
 let db;
@@ -103,7 +108,7 @@ function estadoPublico() {
     proximo: fila[1] ? { id: fila[1].id, nome: fila[1].nome } : null,
     totalRestante: totalRestante(),
     historico: db.alocacoes.map(a => ({
-      nome: nome(a.usuarioId), local: db.locais.find(l => l.id === a.localId), ts: a.ts, auto: !!a.auto,
+      nome: nome(a.usuarioId), local: db.locais.find(l => l.id === a.localId), ts: a.ts, auto: !!a.auto, admin: !!a.admin,
     })).map(h => ({ ...h, local: h.local ? `${h.local.om} (${h.local.cidade})` : '?' })),
   };
 }
@@ -155,10 +160,11 @@ const TIPOS = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '
 function estatico(req, res) {
   const p = decodeURIComponent(new URL(req.url, 'http://x').pathname);
   const arq = path.normalize(path.join(PUBLIC_DIR, p === '/' ? 'index.html' : p));
-  if (!arq.startsWith(PUBLIC_DIR)) return erro(res, 403, 'Proibido');
+  if (!arq.startsWith(PUBLIC_DIR) || (PUBLIC_DIR === __dirname && !/\.(html|css|js|png|svg|ico)$/.test(arq)) || /server\.js$|[\\/]data[\\/]/.test(arq)) return erro(res, 403, 'Proibido');
   fs.readFile(arq, (e, buf) => {
     if (e) return fs.readFile(path.join(PUBLIC_DIR, 'index.html'), (e2, idx) => {
-      res.writeHead(e2 ? 404 : 200, { 'Content-Type': TIPOS['.html'] }); res.end(idx);
+      res.writeHead(e2 ? 404 : 200, { 'Content-Type': TIPOS['.html'] });
+      res.end(e2 ? '<h1>Arquivo index.html não encontrado</h1><p>Confira se a pasta <b>public</b> com o <b>index.html</b> foi enviada ao repositório.</p>' : idx);
     });
     res.writeHead(200, { 'Content-Type': TIPOS[path.extname(arq)] || 'application/octet-stream' });
     res.end(buf);
@@ -293,6 +299,19 @@ async function rotear(req, res) {
     if (ocupadas(id)) return erro(res, 409, 'Há militares alocados nesta OM. Desfaça as alocações antes.');
     db.locais = db.locais.filter(l => l.id !== id);
     mudou(); return json(res, 200, { ok: true });
+  }
+
+  // Administrador escolhe pelo militar da vez (funciona mesmo com as escolhas pausadas)
+  if (rota === 'POST /api/admin/escolher') {
+    const atual = pendentes()[0];
+    if (!atual) return erro(res, 409, 'Todos os militares já foram alocados.');
+    if (corpo.usuarioId && corpo.usuarioId !== atual.id) return erro(res, 409, `A vez mudou: agora é ${atual.nome}. Confira e escolha novamente.`);
+    const local = db.locais.find(l => l.id === corpo.localId);
+    if (!local) return erro(res, 404, 'Local não encontrado.');
+    if (restantes(local) <= 0) return erro(res, 409, 'Esta OM não tem mais vagas.');
+    db.alocacoes.push({ usuarioId: atual.id, localId: local.id, ts: Date.now(), admin: true });
+    mudou();
+    return json(res, 200, { ok: true });
   }
 
   if (rota === 'POST /api/admin/pausa') { db.pausado = !!corpo.pausado; mudou(); return json(res, 200, { ok: true }); }
