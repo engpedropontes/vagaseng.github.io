@@ -62,6 +62,7 @@ h1{font:700 clamp(30px,5vw,46px)/1 var(--cond);margin:0;letter-spacing:.01em}
 .meu .status{flex:1;min-width:220px}
 .meu .status b{display:block;font:700 22px/1.15 var(--cond)}
 .meu.vez{background:var(--ambar-claro);border-color:var(--ambar);box-shadow:0 0 0 4px var(--ambar)}
+.adm-vez{border-style:dashed}
 .meu.vez .status b{font:700 26px/1.1 var(--cond);display:block}
 .meu.alocado{background:var(--oliva-claro);border-color:var(--turquesa)}
 .meu.alocado .status b{font:700 26px/1.1 var(--cond);display:block;color:#8CC0FF}
@@ -276,6 +277,7 @@ function conectar() {
 }
 
 // ------------------------------------------------ home
+const modoAdm = () => !!(admTok && estado?.atual && !minhaVez());
 const minhaVez = () => !!(eu && estado && !estado.pausado && estado.atual?.id === eu.id);
 
 function render() {
@@ -298,7 +300,8 @@ function render() {
 
   // área pessoal
   const area = $('#minhaArea');
-  if (!eu) area.innerHTML = '';
+  if (modoAdm()) area.innerHTML = `<div class="meu vez adm-vez"><div class="status"><b>Modo administrador: escolhendo por ${esc(estado.atual.nome)}</b>Toque em "Escolher" na OM desejada. Após confirmar, a vez passa para ${esc(estado.proximo?.nome || 'o próximo')} e você continua escolhendo pelo seguinte.${estado.pausado ? ' As escolhas estão pausadas para os militares, mas o administrador pode escolher.' : ''}</div><button class="btn" id="sairAdmHome">Sair do modo admin</button></div>`;
+  else if (!eu) area.innerHTML = '';
   else {
     const me = estado.classificacao.find(c => c.id === eu.id);
     if (!me) { sair(); return; }
@@ -327,17 +330,18 @@ function render() {
   if (agoraVez && !eraMinhaVez) avisarVez();
   if (!agoraVez) document.title = 'Escolha de OM - Eng EsAO';
   eraMinhaVez = agoraVez;
+  const podeEscolher = agoraVez || modoAdm();
 
   // quadro
   const maxSlots = Math.max(1, ...estado.locais.map(l => l.vagas));
-  let h = '<thead><tr>' + (agoraVez ? '<th></th>' : '') + '<th>OM</th><th>Cidade</th><th>Livres</th>';
+  let h = '<thead><tr>' + (podeEscolher ? '<th></th>' : '') + '<th>OM</th><th>Cidade</th><th>Livres</th>';
   for (let i = 0; i < maxSlots; i++) h += `<th>Militar ${i + 1}</th>`;
   h += '</tr></thead><tbody>';
   for (const l of estado.locais) {
     if (soVaga && l.restantes === 0) continue;
     const rc = l.vagas === 0 ? 'semvaga' : l.restantes === 0 ? 'cheio' : '';
     h += `<tr class="${rc}">`;
-    if (agoraVez) h += `<td class="acao">${l.restantes > 0 ? `<button class="escolher" data-local="${l.id}">Escolher</button>` : ''}</td>`;
+    if (podeEscolher) h += `<td class="acao">${l.restantes > 0 ? `<button class="escolher" data-local="${l.id}">Escolher</button>` : ''}</td>`;
     h += `<td class="om">${esc(l.om)}</td><td class="cid">${esc(l.cidade)}</td><td class="nv">${l.restantes}/${l.vagas}</td>`;
     for (let i = 0; i < maxSlots; i++) {
       if (i < l.ocupantes.length) h += `<td class="slot ocup ${eu && l.ocupantes[i] === eu.nome ? 'eu' : ''}">${esc(l.ocupantes[i])}</td>`;
@@ -356,8 +360,8 @@ function render() {
       ? `<span class="slot ocup ${eu && l.ocupantes[i] === eu.nome ? 'eu' : ''}">${esc(l.ocupantes[i])}</span>`
       : '<span class="slot livre">Livre</span>';
     const livres = l.vagas === 0 ? 'Sem vagas' : l.restantes === 0 ? 'Completa' : `${l.restantes} de ${l.vagas} livre${l.restantes > 1 ? 's' : ''}`;
-    const botao = agoraVez && l.restantes > 0 ? `<button class="escolher" data-local="${l.id}">Escolher</button>` : `<span class="c-livres">${livres}</span>`;
-    return `<li class="cartao ${rc}"><div class="c-topo"><div class="c-nome"><b>${esc(l.om)}</b><span>${esc(l.cidade)}${agoraVez && l.restantes > 0 ? '<br>' + livres : ''}</span></div>${botao}</div>${vagas ? `<div class="c-vagas">${vagas}</div>` : ''}</li>`;
+    const botao = podeEscolher && l.restantes > 0 ? `<button class="escolher" data-local="${l.id}">Escolher</button>` : `<span class="c-livres">${livres}</span>`;
+    return `<li class="cartao ${rc}"><div class="c-topo"><div class="c-nome"><b>${esc(l.om)}</b><span>${esc(l.cidade)}${podeEscolher && l.restantes > 0 ? '<br>' + livres : ''}</span></div>${botao}</div>${vagas ? `<div class="c-vagas">${vagas}</div>` : ''}</li>`;
   }).join('');
 
   const meuPos = eu && estado.classificacao.find(c => c.id === eu.id)?.pos;
@@ -419,6 +423,7 @@ $('#fLogin').addEventListener('submit', async e => {
     }
   } catch (err) { $('#lErro').textContent = err.message; $('#lSenha').value = ''; $('#lSenha').focus(); }
 });
+function sairAdm() { admTok = null; sessionStorage.removeItem('adm'); render(); }
 function sair() { eu = null; token = null; localStorage.removeItem('tok'); render(); }
 
 // ------------------------------------------------ escolha
@@ -426,18 +431,24 @@ document.addEventListener('click', e => {
   if (e.target.closest('[data-fechar]')) e.target.closest('.fundo').hidden = true;
   if (e.target.id === 'entrar') abrirLogin('user');
   if (e.target.id === 'sair') sair();
+  if (e.target.id === 'sairAdmHome') sairAdm();
+  if (e.target.id === 'irEscolher') { location.hash = ''; mostrarHome(); render(); }
   const b = e.target.closest('.escolher');
   if (b) {
     const l = estado.locais.find(x => x.id === b.dataset.local);
     escolhaPendente = l.id;
-    $('#cTitulo').textContent = `Escolher ${l.om} (${l.cidade})?`;
+    $('#cTitulo').textContent = minhaVez() ? `Escolher ${l.om} (${l.cidade})?` : `Escolher ${l.om} (${l.cidade}) para ${estado.atual.nome}?`;
     $('#cErro').textContent = ''; $('#mConf').hidden = false; $('#cOk').focus();
   }
 });
 $('#cOk').addEventListener('click', async () => {
   $('#cOk').disabled = true;
-  try { await api('POST', '/api/escolher', { localId: escolhaPendente }, token); $('#mConf').hidden = true; }
-  catch (err) { $('#cErro').textContent = err.message; if (err.status === 401) sair(); }
+  const porAdm = !minhaVez() && admTok;
+  try {
+    if (porAdm) await api('POST', '/api/admin/escolher', { localId: escolhaPendente, usuarioId: estado.atual.id }, admTok);
+    else await api('POST', '/api/escolher', { localId: escolhaPendente }, token);
+    $('#mConf').hidden = true;
+  } catch (err) { $('#cErro').textContent = err.message; if (err.status === 401) porAdm ? sairAdm() : sair(); }
   finally { $('#cOk').disabled = false; }
 });
 $('#soVaga').addEventListener('change', e => { soVaga = e.target.checked; render(); });
@@ -445,7 +456,7 @@ $('#soVaga').addEventListener('change', e => { soVaga = e.target.checked; render
 // ------------------------------------------------ administração
 $('#linkAdm').addEventListener('click', () => admTok ? mostrarAdmin() : abrirLogin('admin'));
 $('#linkHome').addEventListener('click', () => { location.hash = ''; mostrarHome(); });
-function mostrarHome() { $('#home').hidden = false; $('#admin').hidden = true; $('#linkHome').hidden = true; $('#linkAdm').hidden = false; }
+function mostrarHome() { setTimeout(render, 0); $('#home').hidden = false; $('#admin').hidden = true; $('#linkHome').hidden = true; $('#linkAdm').hidden = false; }
 function mostrarAdmin() { location.hash = 'admin'; $('#home').hidden = true; $('#admin').hidden = false; $('#linkHome').hidden = false; $('#linkAdm').hidden = true; carregarAdmin(); }
 
 async function carregarAdmin() {
@@ -465,7 +476,8 @@ function renderAdmin() {
   if (aba === 'andamento') {
     corpo = `<div class="painel">
       <div class="bloco"><span class="estado-proc">${d.pausado ? 'Escolhas pausadas' : 'Escolhas abertas'}</span>
-        <button class="btn btn-pri" data-a="pausa">${d.pausado ? 'Abrir escolhas' : 'Pausar escolhas'}</button></div>
+        <button class="btn btn-pri" data-a="pausa">${d.pausado ? 'Abrir escolhas' : 'Pausar escolhas'}</button>
+        ${d.atual ? `<button class="btn btn-cta" id="irEscolher">Escolher por ${esc(d.atual.nome)}</button>` : ''}</div>
       <div class="bloco"><div>Escolhendo agora: <b>${esc(d.atual?.nome || '—')}</b> &nbsp; Próximo: <b>${esc(d.proximo?.nome || '—')}</b><br>
         Vagas restantes: <b>${d.totalRestante}</b> &nbsp; Militares sem OM: <b>${d.classificacao.filter(c => !c.localId).length}</b></div></div>
       <div class="bloco"><button class="btn" data-a="desfazer">Desfazer última escolha</button>
@@ -474,7 +486,7 @@ function renderAdmin() {
         <label class="btn" style="margin:0">Restaurar backup<input type="file" accept=".json" id="restaurar" hidden></label></div>
       <h2>Histórico de alocações</h2>
       <div class="rolagem"><table><thead><tr><th>#</th><th>Horário</th><th>Militar</th><th>OM</th><th>Tipo</th></tr></thead><tbody>
-      ${d.historico.map((h, i) => `<tr><td>${i + 1}</td><td>${new Date(h.ts).toLocaleString('pt-BR')}</td><td>${esc(h.nome)}</td><td>${esc(h.local)}</td><td>${h.auto ? 'Automática' : 'Escolha'}</td></tr>`).reverse().join('') || '<tr><td colspan="5">Nenhuma escolha ainda.</td></tr>'}
+      ${d.historico.map((h, i) => `<tr><td>${i + 1}</td><td>${new Date(h.ts).toLocaleString('pt-BR')}</td><td>${esc(h.nome)}</td><td>${esc(h.local)}</td><td>${h.auto ? 'Automática' : h.admin ? 'Pelo admin' : 'Escolha'}</td></tr>`).reverse().join('') || '<tr><td colspan="5">Nenhuma escolha ainda.</td></tr>'}
       </tbody></table></div></div>`;
   }
   if (aba === 'militares') {
