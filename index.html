@@ -1,0 +1,582 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Escolha de OM - Eng EsAO</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏰</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  color-scheme:dark;
+  --campo:#0A1628; --papel:#11233D; --tinta:#E3EBF6; --tinta2:#93A8C4; --borda:#2F4E78;
+  --oliva:#1F5A9E; --oliva-claro:#18365C; --turquesa:#2F74C6; --turquesa-esc:#1E5DA6;
+  --ambar:#F4C430; --ambar-claro:#2E2A12; --grade:#223C60; --perigo:#FF8A7A;
+  --vazio:#16304F; --escuro:#0A1628;
+  --cond:"Barlow Condensed","Arial Narrow",Arial,sans-serif;
+  --corpo:"Barlow","Segoe UI",Roboto,Arial,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--campo);color:var(--tinta);font:400 15px/1.45 var(--corpo);
+  padding:env(safe-area-inset-top,0) 0 env(safe-area-inset-bottom,0)}
+button,input,select{font:inherit}
+button{cursor:pointer}
+:focus-visible{outline:3px solid var(--ambar);outline-offset:2px}
+.wrap{max-width:1280px;margin:0 auto;padding:18px 16px 60px}
+
+/* cabeçalho */
+header.topo{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:14px}
+h1{font:700 clamp(30px,5vw,46px)/1 var(--cond);margin:0;letter-spacing:.01em}
+.progresso{font:600 18px/1.2 var(--cond);color:var(--tinta2);text-align:right}
+.barra{height:6px;background:var(--grade);margin-top:6px;width:220px;max-width:60vw}
+.barra i{display:block;height:100%;background:var(--oliva);transition:width .4s}
+.linkadm{color:var(--tinta2);font-size:13px;background:none;border:0;text-decoration:underline;padding:0;margin-left:10px}
+
+/* faixa de vez (elemento central) */
+.faixa{display:grid;grid-template-columns:1.4fr 1fr auto;border:2px solid var(--borda);background:var(--papel);margin-bottom:18px}
+.faixa > div{padding:12px 18px}
+.faixa .agora{background:var(--turquesa);color:#fff}
+.faixa small{display:block;font:600 15px/1 var(--cond);opacity:.85;margin-bottom:4px}
+.faixa strong{font:700 clamp(24px,3.4vw,36px)/1.05 var(--cond);display:block}
+.faixa .proximo strong{color:var(--tinta2)}
+.faixa .acao{display:flex;align-items:center;border-left:2px solid var(--borda)}
+.aviso{grid-column:1/-1;background:var(--ambar-claro);border-top:2px solid var(--borda);padding:8px 18px;font-weight:600}
+.btn{border:2px solid var(--borda);background:var(--papel);color:var(--tinta);padding:9px 16px;font-weight:600}
+.btn:hover{background:var(--oliva-claro)}
+.btn-cta{background:var(--ambar);color:#0A1628;border-color:var(--ambar);font:700 20px/1 var(--cond);padding:14px 22px;white-space:nowrap}
+.btn-cta:hover{background:#FFD659}
+.btn-pri{background:var(--turquesa);color:#fff;border-color:var(--turquesa-esc)}
+.btn-pri:hover{background:var(--turquesa-esc)}
+.btn-perigo{color:var(--perigo);border-color:var(--perigo)}
+.faixa .agora small,.fila li.atual .s{opacity:.9}
+.barra i{background:var(--ambar)}
+.btn-sm{padding:4px 10px;font-size:13px}
+
+/* cartão do militar */
+.meu{border:2px solid var(--borda);background:var(--papel);padding:14px 18px;margin-bottom:18px;display:flex;gap:18px;align-items:center;flex-wrap:wrap}
+.meu .nome{font:700 24px/1 var(--cond)}
+.meu .pos{font:700 44px/1 var(--cond);color:var(--turquesa)}
+.meu .status{flex:1;min-width:220px}
+.meu .status b{display:block;font:700 22px/1.15 var(--cond)}
+.meu.vez{background:var(--ambar-claro);border-color:var(--ambar);box-shadow:0 0 0 4px var(--ambar)}
+.meu.vez .status b{font:700 26px/1.1 var(--cond);display:block}
+.meu.alocado{background:var(--oliva-claro);border-color:var(--turquesa)}
+.meu.alocado .status b{font:700 26px/1.1 var(--cond);display:block;color:#8CC0FF}
+@keyframes pulso{0%,100%{box-shadow:0 0 0 4px var(--ambar)}50%{box-shadow:0 0 0 10px rgba(244,196,48,.25)}}
+.meu.vez{animation:pulso 1.6s ease-in-out infinite}
+@keyframes chegou{from{transform:scale(.97);opacity:.4}to{transform:none;opacity:1}}
+.meu.alocado{animation:chegou .5s ease-out}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+/* layout principal */
+.grade{display:grid;grid-template-columns:minmax(0,1fr) 280px;gap:18px;align-items:start}
+.painel{background:var(--papel);border:2px solid var(--borda)}
+.painel h2{font:700 20px/1 var(--cond);margin:0;padding:10px 12px;border-bottom:2px solid var(--borda);display:flex;justify-content:space-between;align-items:center;gap:10px}
+.painel h2 label{font:500 13px var(--corpo);display:flex;gap:6px;align-items:center}
+.rolagem{overflow-x:auto}
+
+/* quadro de vagas */
+table{border-collapse:collapse;width:100%}
+.quadro th,.quadro td{border:1px solid var(--grade);padding:5px 8px;text-align:center;white-space:nowrap}
+.quadro th{background:var(--oliva-claro);font:600 15px var(--cond)}
+.quadro td.om{font-weight:600;text-align:left}
+.quadro td.cid{text-align:left;color:var(--tinta2)}
+.quadro td.slot{min-width:120px;font:600 15px var(--cond)}
+.slot.ocup{background:var(--oliva);color:#fff}
+.slot.ocup.eu{background:var(--ambar);color:#0A1628}
+.slot.livre{background:var(--vazio)}
+.slot.fech{background:repeating-linear-gradient(135deg,#0C1A2E 0 4px,#132640 4px 8px)}
+.quadro tr.semvaga td.om,.quadro tr.semvaga td.cid,.quadro tr.semvaga td.nv{color:#5D7394}
+.quadro tr.cheio td.nv{color:#8CC0FF;font-weight:700}
+.quadro td.acao{padding:3px}
+.quadro .escolher{background:var(--ambar);color:#0A1628;border:2px solid var(--ambar);font:700 15px var(--cond);padding:4px 12px}
+.quadro .escolher:hover{background:#FFD659}
+
+/* classificação */
+.fila{list-style:none;margin:0;padding:0;max-height:70vh;overflow:auto}
+.fila li{display:grid;grid-template-columns:34px 1fr;gap:4px 8px;padding:7px 12px;border-bottom:1px solid var(--grade)}
+.fila .n{font:700 17px/1.2 var(--cond);color:var(--tinta2)}
+.fila .q{font-weight:600}
+.fila .s{grid-column:2;font-size:13px;color:var(--tinta2)}
+.fila li.ja .q{color:var(--tinta2)}
+.fila li.atual{background:var(--turquesa);color:#fff}
+.fila li.atual .n,.fila li.atual .s{color:#fff}
+.fila li.prox{background:var(--ambar-claro);box-shadow:inset 4px 0 var(--ambar)}
+.fila li.voce .q::after{content:" (você)";font-weight:400}
+
+/* modal */
+.fundo{position:fixed;inset:0;background:rgba(3,9,20,.72);display:flex;align-items:center;justify-content:center;padding:16px;z-index:50}
+.fundo[hidden]{display:none}
+.modal{background:var(--papel);border:2px solid var(--borda);width:min(420px,100%);padding:22px}
+.modal h3{font:700 26px/1.1 var(--cond);margin:0 0 6px}
+.modal p{margin:0 0 14px;color:var(--tinta2)}
+.pin{width:100%;font:700 40px/1 var(--cond);letter-spacing:.5em;text-align:center;padding:12px 0 12px .5em;border:2px solid var(--borda);background:var(--escuro);color:var(--tinta)}
+.erro{color:var(--perigo);font-weight:600;min-height:1.4em;margin:8px 0}
+.botoes{display:flex;gap:10px;justify-content:flex-end;margin-top:10px;flex-wrap:wrap}
+
+#conexao{position:fixed;bottom:12px;left:50%;transform:translateX(-50%);background:var(--perigo);color:#0A1628;padding:8px 14px;font-weight:600;z-index:60}
+
+/* admin */
+.abas{display:flex;gap:0;border-bottom:2px solid var(--borda);margin-bottom:14px;flex-wrap:wrap}
+.abas button{border:2px solid var(--borda);border-bottom:0;background:var(--campo);padding:8px 16px;font:700 18px var(--cond);margin-right:-2px}
+.abas button.on{background:var(--papel);position:relative;top:2px}
+.adm table th,.adm table td{border:1px solid var(--grade);padding:6px 8px;text-align:left;white-space:nowrap}
+.adm table th{background:var(--oliva-claro);font:600 15px var(--cond)}
+.form{display:flex;gap:8px;flex-wrap:wrap;padding:12px;border-bottom:2px solid var(--borda);align-items:end}
+.form label{display:flex;flex-direction:column;font-size:13px;color:var(--tinta2);gap:2px}
+.form input{border:2px solid var(--borda);padding:7px 8px;background:var(--escuro);color:var(--tinta);min-width:0}
+.senha{font:700 17px var(--cond);letter-spacing:.15em}
+.posin{width:52px;border:1px solid var(--borda);background:var(--escuro);color:var(--tinta);padding:3px;text-align:center}
+.vagasctl{display:inline-flex;align-items:center;gap:6px}
+.vagasctl b{min-width:22px;text-align:center;font:700 17px var(--cond)}
+.bloco{padding:14px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;border-bottom:2px solid var(--borda)}
+.estado-proc{font:700 22px var(--cond)}
+
+/* versão compacta do quadro (celular) */
+.cartoes{list-style:none;margin:0;padding:0;display:none}
+.cartao{padding:10px 12px;border-bottom:1px solid var(--grade)}
+.c-topo{display:flex;align-items:center;gap:10px}
+.c-nome{flex:1;min-width:0}
+.c-nome b{display:block;font:700 19px/1.1 var(--cond)}
+.c-nome span{font-size:13px;color:var(--tinta2)}
+.c-livres{font:600 15px/1 var(--cond);color:var(--tinta2);white-space:nowrap}
+.cartao.cheio .c-livres{color:#8CC0FF}
+.c-vagas{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.c-vagas .slot{flex:1 1 120px;padding:6px 8px;text-align:center;font:600 15px/1.2 var(--cond);border:1px solid var(--grade)}
+.c-vagas .slot.livre{color:var(--tinta2);font-weight:500}
+.cartao.semvaga .c-nome,.cartao.semvaga .c-livres{opacity:.55}
+.cartao .escolher{background:var(--ambar);color:#0A1628;border:2px solid var(--ambar);font:700 16px var(--cond);padding:9px 14px;min-height:44px}
+.alternar{display:none;border:2px solid var(--borda);margin-bottom:12px}
+.alternar button{flex:1;border:0;background:var(--papel);color:var(--tinta2);font:700 18px var(--cond);padding:11px 8px;min-height:46px}
+.alternar button.on{background:var(--oliva-claro);color:var(--tinta);box-shadow:inset 0 -3px 0 var(--ambar)}
+
+@media (max-width:900px){
+  .grade{grid-template-columns:minmax(0,1fr)}
+  .fila{max-height:none}
+  .alternar{display:flex}
+  .grade[data-vista="quadro"] > aside,.grade[data-vista="fila"] > section{display:none}
+  .quadro{display:none}
+  .cartoes{display:block}
+  .painel h2 .tit,.painel h2.tit-fila{display:none}
+  .painel h2{justify-content:flex-end}
+  .painel h2 label{font-size:14px}
+  .painel h2 input{width:20px;height:20px}
+  .abas{flex-wrap:nowrap;overflow-x:auto}
+  .abas button{white-space:nowrap}
+  .abas button[data-aba="sair"]{margin-left:0}
+  .btn-sm{padding:7px 11px}
+  .form input{min-height:42px}
+  .faixa{grid-template-columns:1fr 1fr}
+  .faixa .acao{grid-column:1/-1;border-left:0;border-top:2px solid var(--borda)}
+  .faixa .acao .btn-cta{width:100%}
+}
+@media (max-width:520px){
+  h1{font-size:23px}
+  .wrap{padding:12px 12px 48px}
+  header.topo{gap:8px}
+  .progresso{width:100%}
+  .barra{width:100%;max-width:none}
+  .linkadm{margin-left:0;padding:6px 0}
+  .faixa > div{padding:10px 14px}
+  .faixa strong{font-size:26px}
+  .meu{padding:12px 14px;gap:10px 14px}
+  .meu .pos{font-size:36px}
+  .faixa{grid-template-columns:1fr}
+  .progresso{text-align:left}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="topo">
+    <h1>Escolha de OM - Eng EsAO</h1>
+    <div class="progresso">
+      <span id="contagem">Carregando…</span>
+      <div class="barra"><i id="barra" style="width:0"></i></div>
+      <div style="margin-top:6px"><button class="linkadm" id="linkHome" hidden>Voltar ao quadro</button><button class="linkadm" id="linkAdm">Administração</button></div>
+    </div>
+  </header>
+
+  <main id="home">
+    <section class="faixa" id="faixa"></section>
+    <section id="minhaArea"></section>
+    <div class="alternar" role="tablist">
+      <button role="tab" data-vista="quadro" class="on">Quadro de vagas</button>
+      <button role="tab" data-vista="fila" id="abaFila">Classificação</button>
+    </div>
+    <div class="grade" id="grade" data-vista="quadro">
+      <section class="painel">
+        <h2><span class="tit">Quadro de vagas</span> <label><input type="checkbox" id="soVaga"> Só OM com vaga</label></h2>
+        <div class="rolagem"><table class="quadro" id="quadro"></table></div>
+        <ul class="cartoes" id="cartoes"></ul>
+      </section>
+      <aside class="painel">
+        <h2 class="tit-fila">Classificação</h2>
+        <ol class="fila" id="fila"></ol>
+      </aside>
+    </div>
+  </main>
+
+  <main id="admin" class="adm" hidden></main>
+</div>
+
+<!-- login do militar / admin -->
+<div class="fundo" id="mLogin" hidden>
+  <form class="modal" id="fLogin" autocomplete="off" novalidate>
+    <h3 id="lTitulo">Entrar com minha senha</h3>
+    <p id="lTexto">Digite sua senha de 4 dígitos.</p>
+    <input class="pin" id="lSenha" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" aria-label="Senha de 4 dígitos">
+    <div class="erro" id="lErro" role="alert"></div>
+    <div class="botoes"><button type="button" class="btn" data-fechar>Cancelar</button><button class="btn btn-pri">Entrar</button></div>
+  </form>
+</div>
+
+<!-- confirmação de escolha -->
+<div class="fundo" id="mConf" hidden>
+  <div class="modal">
+    <h3 id="cTitulo"></h3>
+    <p>Depois de confirmar, a escolha só pode ser desfeita pela administração.</p>
+    <div class="erro" id="cErro" role="alert"></div>
+    <div class="botoes"><button class="btn" data-fechar>Voltar</button><button class="btn btn-pri" id="cOk">Confirmar escolha</button></div>
+  </div>
+</div>
+
+<div id="conexao" hidden>Reconectando ao servidor…</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let estado = null, eu = null, soVaga = false, eraMinhaVez = false, escolhaPendente = null;
+let token = localStorage.getItem('tok');
+let admTok = sessionStorage.getItem('adm'), admDados = null, aba = 'andamento';
+let modoLogin = 'user';
+
+async function api(metodo, rota, corpo, tok) {
+  const r = await fetch(rota, { method: metodo,
+    headers: { 'Content-Type': 'application/json', ...(tok ? { Authorization: 'Bearer ' + tok } : {}) },
+    body: corpo ? JSON.stringify(corpo) : undefined });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) { const e = new Error(d.erro || 'Falha na comunicação com o servidor.'); e.status = r.status; throw e; }
+  return d;
+}
+
+// ------------------------------------------------ tempo real
+function conectar() {
+  const es = new EventSource('/api/eventos');
+  es.onopen = () => $('#conexao').hidden = true;
+  es.onerror = () => $('#conexao').hidden = false;
+  es.onmessage = e => {
+    estado = JSON.parse(e.data);
+    render();
+    if (admTok && !$('#admin').hidden) carregarAdmin();
+  };
+}
+
+// ------------------------------------------------ home
+const minhaVez = () => !!(eu && estado && !estado.pausado && estado.atual?.id === eu.id);
+
+function render() {
+  if (!estado) return;
+  const total = estado.locais.reduce((s, l) => s + l.vagas, 0);
+  const cheias = total - estado.totalRestante;
+  $('#contagem').textContent = `${cheias} de ${total} vagas preenchidas`;
+  $('#barra').style.width = total ? (cheias / total * 100) + '%' : 0;
+
+  // faixa
+  const fim = !estado.atual;
+  let aviso = '';
+  if (estado.pausado && !fim) aviso = '<div class="aviso">Escolhas pausadas pela administração. A ordem abaixo continua valendo.</div>';
+  if (fim) aviso = `<div class="aviso">Escolha concluída: todos os militares foram alocados.</div>`;
+  $('#faixa').innerHTML = `
+    <div class="agora"><small>Escolhendo agora</small><strong>${esc(estado.atual?.nome || '—')}</strong></div>
+    <div class="proximo"><small>Próximo</small><strong>${esc(estado.proximo?.nome || '—')}</strong></div>
+    <div class="acao">${eu ? `<button class="btn" id="sair">Sair (${esc(eu.nome)})</button>`
+                           : `<button class="btn btn-cta" id="entrar">Entrar com minha senha</button>`}</div>${aviso}`;
+
+  // área pessoal
+  const area = $('#minhaArea');
+  if (!eu) area.innerHTML = '';
+  else {
+    const me = estado.classificacao.find(c => c.id === eu.id);
+    if (!me) { sair(); return; }
+    const aFrente = estado.classificacao.filter(c => c.pos < me.pos && !c.localId).length;
+    const abertas = estado.locais.filter(l => l.restantes > 0);
+    let cls = '', status;
+    if (me.localId) {
+      const l = estado.locais.find(x => x.id === me.localId);
+      cls = 'alocado';
+      status = `<b>Você está alocado no ${esc(l?.om)} (${esc(l?.cidade)})</b>Escolha registrada. Você pode fechar esta página.`;
+    } else if (minhaVez()) {
+      cls = 'vez';
+      status = `<b>Sua vez agora</b>Toque em "Escolher" na OM desejada. Restam ${estado.totalRestante} vagas em ${abertas.length} OM.`;
+    } else if (estado.pausado) {
+      status = `<b>Aguardando abertura</b>${aFrente} militar(es) escolhem antes de você.`;
+    } else {
+      status = `<b>Aguardando sua vez</b>${aFrente} militar(es) à sua frente. A escolha abre sozinha quando chegar sua vez. Restam ${estado.totalRestante} vagas em ${abertas.length} OM.`;
+    }
+    area.innerHTML = `<div class="meu ${cls}"><div><div class="pos">${me.pos}º</div></div>
+      <div><div class="nome">${esc(eu.nome)}</div><div style="color:var(--tinta2)">posição na classificação de ${estado.classificacao.length}</div></div>
+      <div class="status">${status}</div></div>`;
+  }
+
+  // aviso de chegada da vez
+  const agoraVez = minhaVez();
+  if (agoraVez && !eraMinhaVez) avisarVez();
+  if (!agoraVez) document.title = 'Escolha de OM - Eng EsAO';
+  eraMinhaVez = agoraVez;
+
+  // quadro
+  const maxSlots = Math.max(1, ...estado.locais.map(l => l.vagas));
+  let h = '<thead><tr>' + (agoraVez ? '<th></th>' : '') + '<th>OM</th><th>Cidade</th><th>Livres</th>';
+  for (let i = 0; i < maxSlots; i++) h += `<th>Militar ${i + 1}</th>`;
+  h += '</tr></thead><tbody>';
+  for (const l of estado.locais) {
+    if (soVaga && l.restantes === 0) continue;
+    const rc = l.vagas === 0 ? 'semvaga' : l.restantes === 0 ? 'cheio' : '';
+    h += `<tr class="${rc}">`;
+    if (agoraVez) h += `<td class="acao">${l.restantes > 0 ? `<button class="escolher" data-local="${l.id}">Escolher</button>` : ''}</td>`;
+    h += `<td class="om">${esc(l.om)}</td><td class="cid">${esc(l.cidade)}</td><td class="nv">${l.restantes}/${l.vagas}</td>`;
+    for (let i = 0; i < maxSlots; i++) {
+      if (i < l.ocupantes.length) h += `<td class="slot ocup ${eu && l.ocupantes[i] === eu.nome ? 'eu' : ''}">${esc(l.ocupantes[i])}</td>`;
+      else if (i < l.vagas) h += '<td class="slot livre"></td>';
+      else h += '<td class="slot fech" aria-label="sem vaga"></td>';
+    }
+    h += '</tr>';
+  }
+  $('#quadro').innerHTML = h + '</tbody>';
+
+  // versão compacta (celular)
+  $('#cartoes').innerHTML = estado.locais.filter(l => !soVaga || l.restantes > 0).map(l => {
+    const rc = l.vagas === 0 ? 'semvaga' : l.restantes === 0 ? 'cheio' : '';
+    let vagas = '';
+    for (let i = 0; i < l.vagas; i++) vagas += i < l.ocupantes.length
+      ? `<span class="slot ocup ${eu && l.ocupantes[i] === eu.nome ? 'eu' : ''}">${esc(l.ocupantes[i])}</span>`
+      : '<span class="slot livre">Livre</span>';
+    const livres = l.vagas === 0 ? 'Sem vagas' : l.restantes === 0 ? 'Completa' : `${l.restantes} de ${l.vagas} livre${l.restantes > 1 ? 's' : ''}`;
+    const botao = agoraVez && l.restantes > 0 ? `<button class="escolher" data-local="${l.id}">Escolher</button>` : `<span class="c-livres">${livres}</span>`;
+    return `<li class="cartao ${rc}"><div class="c-topo"><div class="c-nome"><b>${esc(l.om)}</b><span>${esc(l.cidade)}${agoraVez && l.restantes > 0 ? '<br>' + livres : ''}</span></div>${botao}</div>${vagas ? `<div class="c-vagas">${vagas}</div>` : ''}</li>`;
+  }).join('');
+
+  const meuPos = eu && estado.classificacao.find(c => c.id === eu.id)?.pos;
+  $('#abaFila').textContent = meuPos ? `Classificação (${meuPos}º)` : 'Classificação';
+
+  // classificação
+  const omDe = id => { const l = estado.locais.find(x => x.id === id); return l ? `${l.om} (${l.cidade})` : ''; };
+  $('#fila').innerHTML = estado.classificacao.map(c => {
+    const k = [c.localId ? 'ja' : '', estado.atual?.id === c.id ? 'atual' : '', estado.proximo?.id === c.id ? 'prox' : '', eu?.id === c.id ? 'voce' : ''].join(' ');
+    const s = c.localId ? omDe(c.localId) : estado.atual?.id === c.id ? 'Escolhendo agora' : estado.proximo?.id === c.id ? 'Próximo' : 'Aguardando';
+    return `<li class="${k}"><span class="n">${c.pos}º</span><span class="q">${esc(c.nome)}</span><span class="s">${esc(s)}</span></li>`;
+  }).join('') || '<li><span></span><span class="s">Nenhum militar cadastrado.</span></li>';
+}
+
+function vista(v) {
+  $('#grade').dataset.vista = v;
+  document.querySelectorAll('.alternar button').forEach(b => b.classList.toggle('on', b.dataset.vista === v));
+}
+document.querySelector('.alternar').addEventListener('click', e => { const b = e.target.closest('button'); if (b) vista(b.dataset.vista); });
+
+function avisarVez() {
+  vista('quadro');
+  document.title = '▶ SUA VEZ - Escolha de OM';
+  navigator.vibrate?.([250, 120, 250]);
+  try {
+    const c = new (window.AudioContext || window.webkitAudioContext)();
+    [0, .25].forEach(t => { const o = c.createOscillator(), g = c.createGain();
+      o.frequency.value = 880; o.connect(g); g.connect(c.destination);
+      g.gain.setValueAtTime(.18, c.currentTime + t); o.start(c.currentTime + t); o.stop(c.currentTime + t + .18); });
+  } catch {}
+  $('#minhaArea').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// ------------------------------------------------ login
+function abrirLogin(modo) {
+  modoLogin = modo;
+  $('#lTitulo').textContent = modo === 'admin' ? 'Administração' : 'Entrar com minha senha';
+  $('#lTexto').textContent = modo === 'admin' ? 'Digite a senha de administrador (4 dígitos).' : 'Digite sua senha de 4 dígitos.';
+  const i = $('#lSenha');
+  i.value = ''; i.maxLength = 4; i.inputMode = 'numeric';
+  $('#lErro').textContent = '';
+  $('#mLogin').hidden = false; setTimeout(() => i.focus(), 30);
+}
+$('#lSenha').addEventListener('input', e => {
+  e.target.value = e.target.value.replace(/\D/g, ''); if (e.target.value.length === 4) $('#fLogin').requestSubmit();
+});
+$('#fLogin').addEventListener('submit', async e => {
+  e.preventDefault();
+  const senha = $('#lSenha').value;
+  try {
+    if (modoLogin === 'admin') {
+      const r = await api('POST', '/api/admin/login', { senha });
+      admTok = r.token; sessionStorage.setItem('adm', admTok);
+      $('#mLogin').hidden = true; mostrarAdmin();
+    } else {
+      const r = await api('POST', '/api/login', { senha });
+      token = r.token; eu = r.usuario; localStorage.setItem('tok', token);
+      $('#mLogin').hidden = true; eraMinhaVez = false; render();
+    }
+  } catch (err) { $('#lErro').textContent = err.message; $('#lSenha').value = ''; $('#lSenha').focus(); }
+});
+function sair() { eu = null; token = null; localStorage.removeItem('tok'); render(); }
+
+// ------------------------------------------------ escolha
+document.addEventListener('click', e => {
+  if (e.target.closest('[data-fechar]')) e.target.closest('.fundo').hidden = true;
+  if (e.target.id === 'entrar') abrirLogin('user');
+  if (e.target.id === 'sair') sair();
+  const b = e.target.closest('.escolher');
+  if (b) {
+    const l = estado.locais.find(x => x.id === b.dataset.local);
+    escolhaPendente = l.id;
+    $('#cTitulo').textContent = `Escolher ${l.om} (${l.cidade})?`;
+    $('#cErro').textContent = ''; $('#mConf').hidden = false; $('#cOk').focus();
+  }
+});
+$('#cOk').addEventListener('click', async () => {
+  $('#cOk').disabled = true;
+  try { await api('POST', '/api/escolher', { localId: escolhaPendente }, token); $('#mConf').hidden = true; }
+  catch (err) { $('#cErro').textContent = err.message; if (err.status === 401) sair(); }
+  finally { $('#cOk').disabled = false; }
+});
+$('#soVaga').addEventListener('change', e => { soVaga = e.target.checked; render(); });
+
+// ------------------------------------------------ administração
+$('#linkAdm').addEventListener('click', () => admTok ? mostrarAdmin() : abrirLogin('admin'));
+$('#linkHome').addEventListener('click', () => { location.hash = ''; mostrarHome(); });
+function mostrarHome() { $('#home').hidden = false; $('#admin').hidden = true; $('#linkHome').hidden = true; $('#linkAdm').hidden = false; }
+function mostrarAdmin() { location.hash = 'admin'; $('#home').hidden = true; $('#admin').hidden = false; $('#linkHome').hidden = false; $('#linkAdm').hidden = true; carregarAdmin(); }
+
+async function carregarAdmin() {
+  try { admDados = await api('GET', '/api/admin/dados', null, admTok); renderAdmin(); }
+  catch (err) { if (err.status === 401) { admTok = null; sessionStorage.removeItem('adm'); mostrarHome(); abrirLogin('admin'); } }
+}
+async function adm(metodo, rota, corpo) {
+  try { const r = await api(metodo, rota, corpo, admTok); return r; }
+  catch (err) { alert(err.message); throw err; }
+}
+
+function renderAdmin() {
+  const d = admDados; if (!d) return;
+  const omDe = id => { const l = d.locais.find(x => x.id === id); return l ? `${l.om} (${l.cidade})` : '—'; };
+  const alocDe = id => d.classificacao.find(c => c.id === id)?.localId;
+  let corpo = '';
+  if (aba === 'andamento') {
+    corpo = `<div class="painel">
+      <div class="bloco"><span class="estado-proc">${d.pausado ? 'Escolhas pausadas' : 'Escolhas abertas'}</span>
+        <button class="btn btn-pri" data-a="pausa">${d.pausado ? 'Abrir escolhas' : 'Pausar escolhas'}</button></div>
+      <div class="bloco"><div>Escolhendo agora: <b>${esc(d.atual?.nome || '—')}</b> &nbsp; Próximo: <b>${esc(d.proximo?.nome || '—')}</b><br>
+        Vagas restantes: <b>${d.totalRestante}</b> &nbsp; Militares sem OM: <b>${d.classificacao.filter(c => !c.localId).length}</b></div></div>
+      <div class="bloco"><button class="btn" data-a="desfazer">Desfazer última escolha</button>
+        <button class="btn btn-perigo" data-a="reset">Resetar todas as escolhas</button>
+        <button class="btn" data-a="backup">Baixar backup</button>
+        <label class="btn" style="margin:0">Restaurar backup<input type="file" accept=".json" id="restaurar" hidden></label></div>
+      <h2>Histórico de alocações</h2>
+      <div class="rolagem"><table><thead><tr><th>#</th><th>Horário</th><th>Militar</th><th>OM</th><th>Tipo</th></tr></thead><tbody>
+      ${d.historico.map((h, i) => `<tr><td>${i + 1}</td><td>${new Date(h.ts).toLocaleString('pt-BR')}</td><td>${esc(h.nome)}</td><td>${esc(h.local)}</td><td>${h.auto ? 'Automática' : 'Escolha'}</td></tr>`).reverse().join('') || '<tr><td colspan="5">Nenhuma escolha ainda.</td></tr>'}
+      </tbody></table></div></div>`;
+  }
+  if (aba === 'militares') {
+    corpo = `<div class="painel">
+      <form class="form" id="fUser"><label>Nome<input name="nome" required placeholder="Ex.: SILVA"></label>
+        <label>Senha (opcional)<input name="senha" inputmode="numeric" maxlength="4" pattern="\\d{4}" placeholder="gerar" title="4 dígitos, nenhum repetido mais de 2 vezes" style="width:90px"></label>
+        <button class="btn btn-pri">Cadastrar militar</button></form>
+      <div class="rolagem"><table><thead><tr><th>Posição</th><th></th><th>Nome</th><th>Senha</th><th>OM</th><th></th></tr></thead><tbody>
+      ${d.usuarios.map((u, i) => `<tr>
+        <td><input class="posin" type="number" min="1" max="${d.usuarios.length}" value="${i + 1}" data-pos="${u.id}"></td>
+        <td><button class="btn btn-sm" data-sobe="${u.id}" ${i === 0 ? 'disabled' : ''} aria-label="Subir">▲</button>
+            <button class="btn btn-sm" data-desce="${u.id}" ${i === d.usuarios.length - 1 ? 'disabled' : ''} aria-label="Descer">▼</button></td>
+        <td>${esc(u.nome)} <button class="btn btn-sm" data-renomear="${u.id}">Editar</button></td>
+        <td><span class="senha">${esc(u.senha)}</span> <button class="btn btn-sm" data-senha="${u.id}">Alterar</button></td>
+        <td>${esc(omDe(alocDe(u.id)))}</td>
+        <td><button class="btn btn-sm btn-perigo" data-apagar-u="${u.id}">Excluir</button></td></tr>`).join('') || '<tr><td colspan="6">Cadastre o primeiro militar acima.</td></tr>'}
+      </tbody></table></div></div>`;
+  }
+  if (aba === 'oms') {
+    corpo = `<div class="painel">
+      <form class="form" id="fLocal"><label>OM<input name="om" required placeholder="Ex.: 10º BEC"></label>
+        <label>Cidade<input name="cidade" placeholder="Ex.: Lajes-RN"></label>
+        <label>Vagas<input name="vagas" type="number" min="0" value="1" required style="width:80px"></label>
+        <button class="btn btn-pri">Cadastrar OM</button></form>
+      <div class="rolagem"><table><thead><tr><th>OM</th><th>Cidade</th><th>Vagas</th><th>Ocupadas</th><th></th></tr></thead><tbody>
+      ${d.locais.map(l => `<tr><td>${esc(l.om)}</td><td>${esc(l.cidade)}</td>
+        <td><span class="vagasctl"><button class="btn btn-sm" data-vmenos="${l.id}" aria-label="Menos uma vaga">−</button><b>${l.vagas}</b><button class="btn btn-sm" data-vmais="${l.id}" aria-label="Mais uma vaga">+</button></span></td>
+        <td>${l.vagas - l.restantes}</td>
+        <td><button class="btn btn-sm" data-editar-l="${l.id}">Editar</button> <button class="btn btn-sm btn-perigo" data-apagar-l="${l.id}">Excluir</button></td></tr>`).join('')}
+      </tbody></table></div></div>`;
+  }
+  $('#admin').innerHTML = `<div class="abas">
+      <button class="${aba === 'andamento' ? 'on' : ''}" data-aba="andamento">Andamento</button>
+      <button class="${aba === 'militares' ? 'on' : ''}" data-aba="militares">Militares e senhas</button>
+      <button class="${aba === 'oms' ? 'on' : ''}" data-aba="oms">OMs e vagas</button>
+      <button data-aba="sair" style="margin-left:auto">Sair do admin</button></div>${corpo}`;
+}
+
+function moverPara(id, novaPos) {
+  const ids = admDados.usuarios.map(u => u.id).filter(x => x !== id);
+  ids.splice(Math.max(0, Math.min(ids.length, novaPos - 1)), 0, id);
+  return adm('POST', '/api/admin/ordem', { ids });
+}
+
+$('#admin').addEventListener('click', async e => {
+  const t = e.target.closest('button'); if (!t) return;
+  const ds = t.dataset, d = admDados;
+  if (ds.aba) {
+    if (ds.aba === 'sair') { admTok = null; sessionStorage.removeItem('adm'); location.hash = ''; mostrarHome(); return; }
+    aba = ds.aba; renderAdmin(); return;
+  }
+  if (ds.a === 'pausa') await adm('POST', '/api/admin/pausa', { pausado: !d.pausado });
+  if (ds.a === 'desfazer' && confirm('Desfazer a última escolha? As escolhas serão pausadas.')) await adm('POST', '/api/admin/desfazer');
+  if (ds.a === 'reset' && confirm('Apagar TODAS as escolhas feitas? Militares e OMs são mantidos.') && confirm('Confirma mesmo o reset?')) await adm('POST', '/api/admin/reset');
+  if (ds.a === 'backup') {
+    const r = await fetch('/api/admin/backup', { headers: { Authorization: 'Bearer ' + admTok } });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(await r.blob());
+    a.download = `escolha-om-backup-${new Date().toISOString().slice(0, 16).replace(':', 'h')}.json`; a.click();
+  }
+  const idx = id => d.usuarios.findIndex(u => u.id === id);
+  if (ds.sobe) await moverPara(ds.sobe, idx(ds.sobe));
+  if (ds.desce) await moverPara(ds.desce, idx(ds.desce) + 2);
+  if (ds.renomear) { const n = prompt('Novo nome:', d.usuarios[idx(ds.renomear)].nome); if (n) await adm('PUT', '/api/admin/usuarios/' + ds.renomear, { nome: n }); }
+  if (ds.senha) { const s = prompt('Nova senha (4 dígitos, nenhum dígito repetido mais de 2 vezes):'); if (s) await adm('PUT', '/api/admin/usuarios/' + ds.senha, { senha: s }); }
+  if (ds.apagarU && confirm('Excluir este militar e sua escolha?')) await adm('DELETE', '/api/admin/usuarios/' + ds.apagarU);
+  const l = d.locais.find(x => x.id === (ds.vmais || ds.vmenos || ds.editarL));
+  if (ds.vmais) await adm('PUT', '/api/admin/locais/' + l.id, { vagas: l.vagas + 1 });
+  if (ds.vmenos && l.vagas > 0) await adm('PUT', '/api/admin/locais/' + l.id, { vagas: l.vagas - 1 });
+  if (ds.editarL) {
+    const om = prompt('Nome da OM:', l.om); if (om === null) return;
+    const cidade = prompt('Cidade:', l.cidade); if (cidade === null) return;
+    await adm('PUT', '/api/admin/locais/' + l.id, { om, cidade });
+  }
+  if (ds.apagarL && confirm('Excluir esta OM?')) await adm('DELETE', '/api/admin/locais/' + ds.apagarL);
+});
+$('#admin').addEventListener('change', async e => {
+  if (e.target.dataset.pos) await moverPara(e.target.dataset.pos, parseInt(e.target.value, 10));
+  if (e.target.id === 'restaurar' && e.target.files[0]) {
+    try { const dados = JSON.parse(await e.target.files[0].text());
+      if (confirm('Substituir todos os dados atuais pelo backup?')) await adm('POST', '/api/admin/restaurar', dados); }
+    catch { alert('Arquivo inválido.'); }
+  }
+});
+$('#admin').addEventListener('submit', async e => {
+  e.preventDefault();
+  const f = Object.fromEntries(new FormData(e.target));
+  if (e.target.id === 'fUser') {
+    const r = await adm('POST', '/api/admin/usuarios', { nome: f.nome, senha: f.senha || undefined });
+    alert(`Militar cadastrado. Senha: ${r.senha}`);
+  }
+  if (e.target.id === 'fLocal') await adm('POST', '/api/admin/locais', f);
+});
+
+// ------------------------------------------------ início
+(async () => {
+  if (token) { try { eu = await api('GET', '/api/eu', null, token); } catch { sair(); } }
+  conectar();
+  if (location.hash === '#admin') admTok ? mostrarAdmin() : abrirLogin('admin');
+})();
+window.addEventListener('hashchange', () => {
+  if (location.hash === '#admin') admTok ? mostrarAdmin() : abrirLogin('admin'); else mostrarHome();
+});
+</script>
+</body>
+</html>

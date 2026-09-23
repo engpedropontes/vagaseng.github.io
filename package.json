@@ -1,0 +1,8 @@
+{
+  "name": "escolha-om-eng-esao",
+  "version": "1.0.0",
+  "description": "Escolha de OM por classificação - Eng EsAO",
+  "main": "server.js",
+  "scripts": { "start": "node server.js" },
+  "engines": { "node": ">=18" }
+}
