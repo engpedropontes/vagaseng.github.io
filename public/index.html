@@ -338,7 +338,7 @@ function render() {
   for (let i = 0; i < maxSlots; i++) h += `<th>Militar ${i + 1}</th>`;
   h += '</tr></thead><tbody>';
   for (const l of estado.locais) {
-    if (soVaga && l.restantes === 0) continue;
+    if (l.vagas === 0 || (soVaga && l.restantes === 0)) continue;
     const rc = l.vagas === 0 ? 'semvaga' : l.restantes === 0 ? 'cheio' : '';
     h += `<tr class="${rc}">`;
     if (podeEscolher) h += `<td class="acao">${l.restantes > 0 ? `<button class="escolher" data-local="${l.id}">Escolher</button>` : ''}</td>`;
@@ -353,7 +353,7 @@ function render() {
   $('#quadro').innerHTML = h + '</tbody>';
 
   // versão compacta (celular)
-  $('#cartoes').innerHTML = estado.locais.filter(l => !soVaga || l.restantes > 0).map(l => {
+  $('#cartoes').innerHTML = estado.locais.filter(l => l.vagas > 0 && (!soVaga || l.restantes > 0)).map(l => {
     const rc = l.vagas === 0 ? 'semvaga' : l.restantes === 0 ? 'cheio' : '';
     let vagas = '';
     for (let i = 0; i < l.vagas; i++) vagas += i < l.ocupantes.length
