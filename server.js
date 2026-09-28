@@ -28,16 +28,18 @@ function novoId() { return crypto.randomBytes(6).toString('hex'); }
 function seed() {
   const locais = JSON.parse(fs.readFileSync(path.join(__dirname, 'seed-locais.json'), 'utf8'))
     .map(([om, cidade, vagas]) => ({ id: novoId(), om, cidade, vagas }));
+  // Classificação geral, na ordem (arquivo seed-militares.json)
   const usuarios = [];
-  for (const nome of ['PEDRO VICTOR', 'JARDEL', 'CHESLER', 'LUCAS CARDOSO', 'MATIAS']) {
+  for (const nome of JSON.parse(fs.readFileSync(path.join(__dirname, 'seed-militares.json'), 'utf8'))) {
     usuarios.push({ id: novoId(), nome, senha: gerarSenha(usuarios) });
   }
-  return { locais, usuarios, alocacoes: [], pausado: true };
+  return { locais, usuarios, alocacoes: [], vinculos: [], pausado: true };
 }
 
 function carregar() {
   try {
     db = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+    db.vinculos = db.vinculos || []; // bancos antigos não tinham vagas fixas
   } catch {
     db = seed();
     salvar();
@@ -71,9 +73,13 @@ function senhaValida(s) {
 }
 
 // ---------------------------------------------------------------- regras
-const ocupadas = localId => db.alocacoes.filter(a => a.localId === localId).length;
+// Vagas fixas (vinculos): militar amarrado pelo admin a uma OM. Ocupa a vaga,
+// não entra na fila de escolha e NÃO é apagado pelo reset das escolhas.
+const vinculoDe = uid => db.vinculos.find(v => v.usuarioId === uid);
+const ocupadas = localId => db.alocacoes.filter(a => a.localId === localId).length
+  + db.vinculos.filter(v => v.localId === localId).length;
 const restantes = l => Math.max(0, l.vagas - ocupadas(l.id));
-const alocacaoDe = uid => db.alocacoes.find(a => a.usuarioId === uid);
+const alocacaoDe = uid => vinculoDe(uid) || db.alocacoes.find(a => a.usuarioId === uid);
 const pendentes = () => db.usuarios.filter(u => !alocacaoDe(u.id));
 const totalRestante = () => db.locais.reduce((s, l) => s + restantes(l), 0);
 
@@ -98,11 +104,12 @@ function estadoPublico() {
     pausado: db.pausado,
     locais: db.locais.map(l => ({
       id: l.id, om: l.om, cidade: l.cidade, vagas: l.vagas, restantes: restantes(l),
-      ocupantes: db.alocacoes.filter(a => a.localId === l.id).map(a => nome(a.usuarioId)),
+      fixos: db.vinculos.filter(v => v.localId === l.id).map(v => nome(v.usuarioId)),
+      ocupantes: [...db.vinculos.filter(v => v.localId === l.id), ...db.alocacoes.filter(a => a.localId === l.id)].map(a => nome(a.usuarioId)),
     })),
     classificacao: db.usuarios.map((u, i) => {
       const a = alocacaoDe(u.id);
-      return { id: u.id, pos: i + 1, nome: u.nome, localId: a ? a.localId : null };
+      return { id: u.id, pos: i + 1, nome: u.nome, localId: a ? a.localId : null, fixo: !!vinculoDe(u.id) };
     }),
     atual: fila[0] ? { id: fila[0].id, nome: fila[0].nome } : null,
     proximo: fila[1] ? { id: fila[1].id, nome: fila[1].nome } : null,
@@ -263,6 +270,7 @@ async function rotear(req, res) {
   if (recurso === 'usuarios' && id && req.method === 'DELETE') {
     db.usuarios = db.usuarios.filter(u => u.id !== id);
     db.alocacoes = db.alocacoes.filter(a => a.usuarioId !== id);
+    db.vinculos = db.vinculos.filter(v => v.usuarioId !== id);
     mudou(); return json(res, 200, { ok: true });
   }
 
@@ -301,6 +309,28 @@ async function rotear(req, res) {
     mudou(); return json(res, 200, { ok: true });
   }
 
+  // Amarrar / soltar um militar numa vaga fixa. localId vazio = soltar.
+  if (rota === 'POST /api/admin/vinculo') {
+    const u = db.usuarios.find(x => x.id === corpo.usuarioId);
+    if (!u) return erro(res, 404, 'Militar não encontrado.');
+    const antigo = vinculoDe(u.id);
+    if (!corpo.localId) {
+      db.vinculos = db.vinculos.filter(v => v.usuarioId !== u.id);
+      mudou(); return json(res, 200, { ok: true });
+    }
+    const local = db.locais.find(l => l.id === corpo.localId);
+    if (!local) return erro(res, 404, 'Local não encontrado.');
+    if (antigo?.localId === local.id) return json(res, 200, { ok: true });
+    // se ele já tinha escolhido, a escolha dá lugar à vaga fixa
+    const escolha = db.alocacoes.find(a => a.usuarioId === u.id);
+    const liberaAqui = (escolha?.localId === local.id ? 1 : 0);
+    if (restantes(local) + liberaAqui <= 0) return erro(res, 409, `${local.om} não tem vaga livre para fixar ${u.nome}.`);
+    db.alocacoes = db.alocacoes.filter(a => a.usuarioId !== u.id);
+    db.vinculos = db.vinculos.filter(v => v.usuarioId !== u.id);
+    db.vinculos.push({ usuarioId: u.id, localId: local.id });
+    mudou(); return json(res, 200, { ok: true });
+  }
+
   // Administrador escolhe pelo militar da vez (funciona mesmo com as escolhas pausadas)
   if (rota === 'POST /api/admin/escolher') {
     const atual = pendentes()[0];
@@ -324,7 +354,7 @@ async function rotear(req, res) {
   }
 
   if (rota === 'POST /api/admin/reset') {
-    db.alocacoes = []; db.pausado = true;
+    db.alocacoes = []; db.pausado = true; // vagas fixas (vinculos) são mantidas
     mudou(); return json(res, 200, { ok: true });
   }
 
@@ -336,7 +366,7 @@ async function rotear(req, res) {
   if (rota === 'POST /api/admin/restaurar') {
     const d = corpo;
     if (!Array.isArray(d.locais) || !Array.isArray(d.usuarios) || !Array.isArray(d.alocacoes)) return erro(res, 400, 'Arquivo de backup inválido.');
-    db = { locais: d.locais, usuarios: d.usuarios, alocacoes: d.alocacoes, pausado: true };
+    db = { locais: d.locais, usuarios: d.usuarios, alocacoes: d.alocacoes, vinculos: Array.isArray(d.vinculos) ? d.vinculos : [], pausado: true };
     mudou(); return json(res, 200, { ok: true });
   }
 
