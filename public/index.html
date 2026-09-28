@@ -88,6 +88,13 @@ table{border-collapse:collapse;width:100%}
 .quadro td.slot{min-width:120px;font:600 15px var(--cond)}
 .slot.ocup{background:var(--oliva);color:#fff}
 .slot.ocup.eu{background:var(--ambar);color:#0A1628}
+.slot.ocup.fixo{background:#15426F;outline:2px dashed #6FA8E8;outline-offset:-4px}
+.slot.ocup.fixo::before{content:"🔒 ";font-size:.85em}
+.slot.ocup.fixo.eu{background:var(--ambar);outline-color:#0A1628}
+.btn-adm{background:#17B3C9;color:#0A1628;border:2px solid #17B3C9;font:700 17px/1 var(--cond);letter-spacing:.06em;padding:8px 18px}
+.btn-adm:hover{background:#3FCBDD;border-color:#3FCBDD}
+.fixos-form select{border:2px solid var(--borda);padding:7px 8px;background:var(--escuro);color:var(--tinta);min-height:40px;max-width:100%}
+.legenda{font-size:13px;color:var(--tinta2);padding:8px 12px;border-top:1px solid var(--grade)}
 .slot.livre{background:var(--vazio)}
 .slot.fech{background:repeating-linear-gradient(135deg,#0C1A2E 0 4px,#132640 4px 8px)}
 .quadro tr.semvaga td.om,.quadro tr.semvaga td.cid,.quadro tr.semvaga td.nv{color:#5D7394}
@@ -197,7 +204,7 @@ table{border-collapse:collapse;width:100%}
     <div class="progresso">
       <span id="contagem">Carregando…</span>
       <div class="barra"><i id="barra" style="width:0"></i></div>
-      <div style="margin-top:6px"><button class="linkadm" id="linkHome" hidden>Voltar ao quadro</button><button class="linkadm" id="linkAdm">Administração</button></div>
+      <div style="margin-top:6px"><button class="linkadm" id="linkHome" hidden>Voltar ao quadro</button><button class="btn btn-adm" id="linkAdm">ADM</button></div>
     </div>
   </header>
 
@@ -296,7 +303,7 @@ function render() {
     <div class="agora"><small>Escolhendo agora</small><strong>${esc(estado.atual?.nome || '—')}</strong></div>
     <div class="proximo"><small>Próximo</small><strong>${esc(estado.proximo?.nome || '—')}</strong></div>
     <div class="acao">${eu ? `<button class="btn" id="sair">Sair (${esc(eu.nome)})</button>`
-                           : `<button class="btn btn-cta" id="entrar">Entrar com minha senha</button>`}</div>${aviso}`;
+                           : `<button class="btn btn-cta" id="entrar">SENHA</button>`}</div>${aviso}`;
 
   // área pessoal
   const area = $('#minhaArea');
@@ -311,7 +318,9 @@ function render() {
     if (me.localId) {
       const l = estado.locais.find(x => x.id === me.localId);
       cls = 'alocado';
-      status = `<b>Você está alocado no ${esc(l?.om)} (${esc(l?.cidade)})</b>Escolha registrada. Você pode fechar esta página.`;
+      status = me.fixo
+        ? `<b>Você está na vaga fixa do ${esc(l?.om)} (${esc(l?.cidade)})</b>Vaga definida pela administração. Você não precisa escolher.`
+        : `<b>Você está alocado no ${esc(l?.om)} (${esc(l?.cidade)})</b>Escolha registrada. Você pode fechar esta página.`;
     } else if (minhaVez()) {
       cls = 'vez';
       status = `<b>Sua vez agora</b>Toque em "Escolher" na OM desejada. Restam ${estado.totalRestante} vagas em ${abertas.length} OM.`;
@@ -344,7 +353,7 @@ function render() {
     if (podeEscolher) h += `<td class="acao">${l.restantes > 0 ? `<button class="escolher" data-local="${l.id}">Escolher</button>` : ''}</td>`;
     h += `<td class="om">${esc(l.om)}</td><td class="cid">${esc(l.cidade)}</td><td class="nv">${l.restantes}/${l.vagas}</td>`;
     for (let i = 0; i < maxSlots; i++) {
-      if (i < l.ocupantes.length) h += `<td class="slot ocup ${eu && l.ocupantes[i] === eu.nome ? 'eu' : ''}">${esc(l.ocupantes[i])}</td>`;
+      if (i < l.ocupantes.length) h += `<td class="slot ocup ${eu && l.ocupantes[i] === eu.nome ? 'eu' : ''} ${(l.fixos || []).includes(l.ocupantes[i]) ? 'fixo' : ''}" ${(l.fixos || []).includes(l.ocupantes[i]) ? 'title="Vaga fixa definida pela administração"' : ''}>${esc(l.ocupantes[i])}</td>`;
       else if (i < l.vagas) h += '<td class="slot livre"></td>';
       else h += '<td class="slot fech" aria-label="sem vaga"></td>';
     }
@@ -357,7 +366,7 @@ function render() {
     const rc = l.vagas === 0 ? 'semvaga' : l.restantes === 0 ? 'cheio' : '';
     let vagas = '';
     for (let i = 0; i < l.vagas; i++) vagas += i < l.ocupantes.length
-      ? `<span class="slot ocup ${eu && l.ocupantes[i] === eu.nome ? 'eu' : ''}">${esc(l.ocupantes[i])}</span>`
+      ? `<span class="slot ocup ${eu && l.ocupantes[i] === eu.nome ? 'eu' : ''} ${(l.fixos || []).includes(l.ocupantes[i]) ? 'fixo' : ''}">${esc(l.ocupantes[i])}</span>`
       : '<span class="slot livre">Livre</span>';
     const livres = l.vagas === 0 ? 'Sem vagas' : l.restantes === 0 ? 'Completa' : `${l.restantes} de ${l.vagas} livre${l.restantes > 1 ? 's' : ''}`;
     const botao = podeEscolher && l.restantes > 0 ? `<button class="escolher" data-local="${l.id}">Escolher</button>` : `<span class="c-livres">${livres}</span>`;
@@ -371,7 +380,7 @@ function render() {
   const omDe = id => { const l = estado.locais.find(x => x.id === id); return l ? `${l.om} (${l.cidade})` : ''; };
   $('#fila').innerHTML = estado.classificacao.map(c => {
     const k = [c.localId ? 'ja' : '', estado.atual?.id === c.id ? 'atual' : '', estado.proximo?.id === c.id ? 'prox' : '', eu?.id === c.id ? 'voce' : ''].join(' ');
-    const s = c.localId ? omDe(c.localId) : estado.atual?.id === c.id ? 'Escolhendo agora' : estado.proximo?.id === c.id ? 'Próximo' : 'Aguardando';
+    const s = c.localId ? (c.fixo ? 'Vaga fixa: ' : '') + omDe(c.localId) : estado.atual?.id === c.id ? 'Escolhendo agora' : estado.proximo?.id === c.id ? 'Próximo' : 'Aguardando';
     return `<li class="${k}"><span class="n">${c.pos}º</span><span class="q">${esc(c.nome)}</span><span class="s">${esc(s)}</span></li>`;
   }).join('') || '<li><span></span><span class="s">Nenhum militar cadastrado.</span></li>';
 }
@@ -472,6 +481,7 @@ function renderAdmin() {
   const d = admDados; if (!d) return;
   const omDe = id => { const l = d.locais.find(x => x.id === id); return l ? `${l.om} (${l.cidade})` : '—'; };
   const alocDe = id => d.classificacao.find(c => c.id === id)?.localId;
+  const fixoDe = id => d.classificacao.find(c => c.id === id)?.fixo;
   let corpo = '';
   if (aba === 'andamento') {
     corpo = `<div class="painel">
@@ -479,9 +489,9 @@ function renderAdmin() {
         <button class="btn btn-pri" data-a="pausa">${d.pausado ? 'Abrir escolhas' : 'Pausar escolhas'}</button>
         ${d.atual ? `<button class="btn btn-cta" id="irEscolher">Escolher por ${esc(d.atual.nome)}</button>` : ''}</div>
       <div class="bloco"><div>Escolhendo agora: <b>${esc(d.atual?.nome || '—')}</b> &nbsp; Próximo: <b>${esc(d.proximo?.nome || '—')}</b><br>
-        Vagas restantes: <b>${d.totalRestante}</b> &nbsp; Militares sem OM: <b>${d.classificacao.filter(c => !c.localId).length}</b></div></div>
+        Vagas restantes: <b>${d.totalRestante}</b> &nbsp; Militares sem OM: <b>${d.classificacao.filter(c => !c.localId).length}</b> &nbsp; Vagas fixas: <b>${d.classificacao.filter(c => c.fixo).length}</b></div></div>
       <div class="bloco"><button class="btn" data-a="desfazer">Desfazer última escolha</button>
-        <button class="btn btn-perigo" data-a="reset">Resetar todas as escolhas</button>
+        <button class="btn btn-perigo" data-a="reset" title="As vagas fixas são mantidas">Resetar todas as escolhas</button>
         <button class="btn" data-a="backup">Baixar backup</button>
         <label class="btn" style="margin:0">Restaurar backup<input type="file" accept=".json" id="restaurar" hidden></label></div>
       <h2>Histórico de alocações</h2>
@@ -501,9 +511,26 @@ function renderAdmin() {
             <button class="btn btn-sm" data-desce="${u.id}" ${i === d.usuarios.length - 1 ? 'disabled' : ''} aria-label="Descer">▼</button></td>
         <td>${esc(u.nome)} <button class="btn btn-sm" data-renomear="${u.id}">Editar</button></td>
         <td><span class="senha">${esc(u.senha)}</span> <button class="btn btn-sm" data-senha="${u.id}">Alterar</button></td>
-        <td>${esc(omDe(alocDe(u.id)))}</td>
+        <td>${fixoDe(u.id) ? '🔒 ' : ''}${esc(omDe(alocDe(u.id)))}</td>
         <td><button class="btn btn-sm btn-perigo" data-apagar-u="${u.id}">Excluir</button></td></tr>`).join('') || '<tr><td colspan="6">Cadastre o primeiro militar acima.</td></tr>'}
       </tbody></table></div></div>`;
+  }
+  if (aba === 'fixas') {
+    const fixos = d.classificacao.filter(c => c.fixo);
+    const livresM = d.classificacao.filter(c => !c.fixo);
+    const locaisOk = d.locais.filter(l => l.restantes > 0);
+    corpo = `<div class="painel">
+      <form class="form fixos-form" id="fFixo">
+        <label>Militar<select name="usuarioId" required><option value="">Selecione…</option>
+          ${livresM.map(c => `<option value="${c.id}">${c.pos}º ${esc(c.nome)}${c.localId ? ' (já escolheu ' + esc(omDe(c.localId)) + ')' : ''}</option>`).join('')}</select></label>
+        <label>OM<select name="localId" required><option value="">Selecione…</option>
+          ${locaisOk.map(l => `<option value="${l.id}">${esc(l.om)} (${esc(l.cidade)}) · ${l.restantes} livre${l.restantes > 1 ? 's' : ''}</option>`).join('')}</select></label>
+        <button class="btn btn-pri">Fixar na vaga</button></form>
+      <div class="rolagem"><table><thead><tr><th>Posição</th><th>Militar</th><th>Vaga fixa</th><th></th></tr></thead><tbody>
+      ${fixos.map(c => `<tr><td>${c.pos}º</td><td>${esc(c.nome)}</td><td>🔒 ${esc(omDe(c.localId))}</td>
+        <td><button class="btn btn-sm btn-perigo" data-soltar="${c.id}">Soltar</button></td></tr>`).join('') || '<tr><td colspan="4">Nenhum militar com vaga fixa.</td></tr>'}
+      </tbody></table></div>
+      <div class="legenda">O militar com vaga fixa ocupa a vaga, é pulado na ordem de escolha e continua na vaga mesmo depois de "Resetar todas as escolhas". Ao soltar, ele volta para a fila na sua posição da classificação.</div></div>`;
   }
   if (aba === 'oms') {
     corpo = `<div class="painel">
@@ -521,6 +548,7 @@ function renderAdmin() {
   $('#admin').innerHTML = `<div class="abas">
       <button class="${aba === 'andamento' ? 'on' : ''}" data-aba="andamento">Andamento</button>
       <button class="${aba === 'militares' ? 'on' : ''}" data-aba="militares">Militares e senhas</button>
+      <button class="${aba === 'fixas' ? 'on' : ''}" data-aba="fixas">Vagas fixas</button>
       <button class="${aba === 'oms' ? 'on' : ''}" data-aba="oms">OMs e vagas</button>
       <button data-aba="sair" style="margin-left:auto">Sair do admin</button></div>${corpo}`;
 }
@@ -540,7 +568,7 @@ $('#admin').addEventListener('click', async e => {
   }
   if (ds.a === 'pausa') await adm('POST', '/api/admin/pausa', { pausado: !d.pausado });
   if (ds.a === 'desfazer' && confirm('Desfazer a última escolha? As escolhas serão pausadas.')) await adm('POST', '/api/admin/desfazer');
-  if (ds.a === 'reset' && confirm('Apagar TODAS as escolhas feitas? Militares e OMs são mantidos.') && confirm('Confirma mesmo o reset?')) await adm('POST', '/api/admin/reset');
+  if (ds.a === 'reset' && confirm('Apagar TODAS as escolhas feitas? Militares, OMs e vagas fixas são mantidos.') && confirm('Confirma mesmo o reset?')) await adm('POST', '/api/admin/reset');
   if (ds.a === 'backup') {
     const r = await fetch('/api/admin/backup', { headers: { Authorization: 'Bearer ' + admTok } });
     const a = document.createElement('a'); a.href = URL.createObjectURL(await r.blob());
@@ -560,6 +588,10 @@ $('#admin').addEventListener('click', async e => {
     const cidade = prompt('Cidade:', l.cidade); if (cidade === null) return;
     await adm('PUT', '/api/admin/locais/' + l.id, { om, cidade });
   }
+  if (ds.soltar) {
+    const c = d.classificacao.find(x => x.id === ds.soltar);
+    if (confirm(`Soltar ${c.nome} da vaga fixa? Ele volta para a fila de escolha.`)) await adm('POST', '/api/admin/vinculo', { usuarioId: ds.soltar, localId: null });
+  }
   if (ds.apagarL && confirm('Excluir esta OM?')) await adm('DELETE', '/api/admin/locais/' + ds.apagarL);
 });
 $('#admin').addEventListener('change', async e => {
@@ -578,6 +610,11 @@ $('#admin').addEventListener('submit', async e => {
     alert(`Militar cadastrado. Senha: ${r.senha}`);
   }
   if (e.target.id === 'fLocal') await adm('POST', '/api/admin/locais', f);
+  if (e.target.id === 'fFixo') {
+    const c = admDados.classificacao.find(x => x.id === f.usuarioId);
+    if (c?.localId && !confirm(`${c.nome} já escolheu uma OM. A escolha será substituída pela vaga fixa. Continuar?`)) return;
+    await adm('POST', '/api/admin/vinculo', f);
+  }
 });
 
 // ------------------------------------------------ início
