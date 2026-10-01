@@ -125,6 +125,35 @@ table{border-collapse:collapse;width:100%}
 .erro{color:var(--perigo);font-weight:600;min-height:1.4em;margin:8px 0}
 .botoes{display:flex;gap:10px;justify-content:flex-end;margin-top:10px;flex-wrap:wrap}
 
+.cron{font-weight:500}
+.so-impressao{display:none}
+
+/* impressão do quadro (botão no admin): fundo branco, só quadro e classificação */
+@page{margin:12mm}
+@media print{
+  body.imprimir{background:#fff;color:#000;font-size:11px;padding:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  body.imprimir .wrap{max-width:none;padding:0}
+  body.imprimir h1{font-size:24px}
+  body.imprimir .so-impressao{display:block;margin:4px 0 10px;color:#333}
+  body.imprimir .progresso,body.imprimir #faixa,body.imprimir #minhaArea,body.imprimir .alternar,body.imprimir #admin,
+  body.imprimir .painel h2 label,body.imprimir .cartoes,body.imprimir .acao,body.imprimir #conexao,body.imprimir .fundo{display:none!important}
+  body.imprimir #home,body.imprimir .grade,body.imprimir .grade > *{display:block!important}
+  body.imprimir .quadro{display:table!important}
+  body.imprimir .painel{background:#fff;border:0;margin-bottom:14px}
+  body.imprimir .painel h2,body.imprimir .painel h2 .tit{display:block!important;border:0;padding:10px 0 6px;color:#000}
+  body.imprimir .quadro th,body.imprimir .quadro td{border:1px solid #999;color:#000!important;background:#fff;padding:3px 6px}
+  body.imprimir .quadro th{background:#e8e8e8}
+  body.imprimir .slot.ocup,body.imprimir .slot.ocup.eu,body.imprimir .slot.ocup.fixo{background:#fff;color:#000;outline:0;font-weight:700}
+  body.imprimir .slot.fech{background:#d6d6d6}
+  body.imprimir tr,body.imprimir .fila li{break-inside:avoid}
+  body.imprimir aside{break-before:page}
+  body.imprimir .fila{max-height:none;overflow:visible;columns:2;column-gap:24px}
+  body.imprimir .fila li,body.imprimir .fila li.atual,body.imprimir .fila li.prox{grid-template-columns:28px 1fr 1.3fr;align-items:baseline;background:#fff;color:#000;box-shadow:none;border-bottom:1px solid #ccc;padding:4px 0}
+  body.imprimir .fila .s{grid-column:auto}
+  body.imprimir .fila .n,body.imprimir .fila .s,body.imprimir .fila li.ja .q,body.imprimir .fila li.atual .n,body.imprimir .fila li.atual .s{color:#000}
+  body.imprimir .fila li.voce .q::after{content:none}
+}
+
 #conexao{position:fixed;bottom:12px;left:50%;transform:translateX(-50%);background:var(--perigo);color:#0A1628;padding:8px 14px;font-weight:600;z-index:60}
 
 /* admin */
@@ -200,7 +229,7 @@ table{border-collapse:collapse;width:100%}
 <body>
 <div class="wrap">
   <header class="topo">
-    <h1>Escolha de OM - Eng EsAO</h1>
+    <div><h1>Escolha de OM - Eng EsAO</h1><p class="so-impressao" id="impData"></p></div>
     <div class="progresso">
       <span id="contagem">Carregando…</span>
       <div class="barra"><i id="barra" style="width:0"></i></div>
@@ -261,6 +290,7 @@ let estado = null, eu = null, soVaga = false, eraMinhaVez = false, escolhaPenden
 let token = localStorage.getItem('tok');
 let admTok = sessionStorage.getItem('adm'), admDados = null, aba = 'andamento';
 let modoLogin = 'user';
+let difRelogio = 0; // diferença entre o relógio deste aparelho e o do servidor
 
 async function api(metodo, rota, corpo, tok) {
   const r = await fetch(rota, { method: metodo,
@@ -278,6 +308,7 @@ function conectar() {
   es.onerror = () => $('#conexao').hidden = false;
   es.onmessage = e => {
     estado = JSON.parse(e.data);
+    difRelogio = Date.now() - estado.agora;
     render();
     if (admTok && !$('#admin').hidden) carregarAdmin();
   };
@@ -300,7 +331,7 @@ function render() {
   if (estado.pausado && !fim) aviso = '<div class="aviso">Escolhas pausadas pela administração. A ordem abaixo continua valendo.</div>';
   if (fim) aviso = `<div class="aviso">Escolha concluída: todos os militares foram alocados.</div>`;
   $('#faixa').innerHTML = `
-    <div class="agora"><small>Escolhendo agora</small><strong>${esc(estado.atual?.nome || '—')}</strong></div>
+    <div class="agora"><small>Escolhendo agora<span class="cron"></span></small><strong>${esc(estado.atual?.nome || '—')}</strong></div>
     <div class="proximo"><small>Próximo</small><strong>${esc(estado.proximo?.nome || '—')}</strong></div>
     <div class="acao">${eu ? `<button class="btn" id="sair">Sair (${esc(eu.nome)})</button>`
                            : `<button class="btn btn-cta" id="entrar">SENHA</button>`}</div>${aviso}`;
@@ -343,7 +374,7 @@ function render() {
 
   // quadro
   const maxSlots = Math.max(1, ...estado.locais.map(l => l.vagas));
-  let h = '<thead><tr>' + (podeEscolher ? '<th></th>' : '') + '<th>OM</th><th>Cidade</th><th>Livres</th>';
+  let h = '<thead><tr>' + (podeEscolher ? '<th class="acao"></th>' : '') + '<th>OM</th><th>Cidade</th><th>Livres</th>';
   for (let i = 0; i < maxSlots; i++) h += `<th>Militar ${i + 1}</th>`;
   h += '</tr></thead><tbody>';
   for (const l of estado.locais) {
@@ -383,7 +414,20 @@ function render() {
     const s = c.localId ? (c.fixo ? 'Vaga fixa: ' : '') + omDe(c.localId) : estado.atual?.id === c.id ? 'Escolhendo agora' : estado.proximo?.id === c.id ? 'Próximo' : 'Aguardando';
     return `<li class="${k}"><span class="n">${c.pos}º</span><span class="q">${esc(c.nome)}</span><span class="s">${esc(s)}</span></li>`;
   }).join('') || '<li><span></span><span class="s">Nenhum militar cadastrado.</span></li>';
+  cronometro();
 }
+
+// Tempo desde que começou a vez do militar atual (não conta com as escolhas pausadas)
+function cronometro() {
+  let txt = '';
+  if (estado?.vezDesde && estado.atual && !estado.pausado) {
+    const seg = Math.max(0, Math.floor((Date.now() - difRelogio - estado.vezDesde) / 1000));
+    const h = Math.floor(seg / 3600), m = Math.floor(seg / 60) % 60, s = String(seg % 60).padStart(2, '0');
+    txt = ' · há ' + (h ? `${h}h${String(m).padStart(2, '0')}` : `${m}:${s}`);
+  }
+  document.querySelectorAll('.cron').forEach(el => el.textContent = txt);
+}
+setInterval(cronometro, 1000);
 
 function vista(v) {
   $('#grade').dataset.vista = v;
@@ -488,11 +532,12 @@ function renderAdmin() {
       <div class="bloco"><span class="estado-proc">${d.pausado ? 'Escolhas pausadas' : 'Escolhas abertas'}</span>
         <button class="btn btn-pri" data-a="pausa">${d.pausado ? 'Abrir escolhas' : 'Pausar escolhas'}</button>
         ${d.atual ? `<button class="btn btn-cta" id="irEscolher">Escolher por ${esc(d.atual.nome)}</button>` : ''}</div>
-      <div class="bloco"><div>Escolhendo agora: <b>${esc(d.atual?.nome || '—')}</b> &nbsp; Próximo: <b>${esc(d.proximo?.nome || '—')}</b><br>
+      <div class="bloco"><div>Escolhendo agora: <b>${esc(d.atual?.nome || '—')}</b><span class="cron"></span> &nbsp; Próximo: <b>${esc(d.proximo?.nome || '—')}</b><br>
         Vagas restantes: <b>${d.totalRestante}</b> &nbsp; Militares sem OM: <b>${d.classificacao.filter(c => !c.localId).length}</b> &nbsp; Vagas fixas: <b>${d.classificacao.filter(c => c.fixo).length}</b></div></div>
       <div class="bloco"><button class="btn" data-a="desfazer">Desfazer última escolha</button>
         <button class="btn btn-perigo" data-a="reset" title="As vagas fixas são mantidas">Resetar todas as escolhas</button>
         <button class="btn" data-a="backup">Baixar backup</button>
+        <button class="btn" data-a="imprimir">Imprimir quadro</button>
         <label class="btn" style="margin:0">Restaurar backup<input type="file" accept=".json" id="restaurar" hidden></label></div>
       <h2>Histórico de alocações</h2>
       <div class="rolagem"><table><thead><tr><th>#</th><th>Horário</th><th>Militar</th><th>OM</th><th>Tipo</th></tr></thead><tbody>
@@ -551,7 +596,18 @@ function renderAdmin() {
       <button class="${aba === 'fixas' ? 'on' : ''}" data-aba="fixas">Vagas fixas</button>
       <button class="${aba === 'oms' ? 'on' : ''}" data-aba="oms">OMs e vagas</button>
       <button data-aba="sair" style="margin-left:auto">Sair do admin</button></div>${corpo}`;
+  cronometro();
 }
+
+// Imprime (ou salva em PDF) o quadro e a classificação em fundo branco
+function imprimir() {
+  render();
+  const total = estado.locais.reduce((s, l) => s + l.vagas, 0);
+  $('#impData').textContent = `Situação em ${new Date().toLocaleString('pt-BR')} · ${total - estado.totalRestante} de ${total} vagas preenchidas`;
+  document.body.classList.add('imprimir');
+  window.print();
+}
+window.addEventListener('afterprint', () => document.body.classList.remove('imprimir'));
 
 function moverPara(id, novaPos) {
   const ids = admDados.usuarios.map(u => u.id).filter(x => x !== id);
@@ -580,6 +636,7 @@ $('#admin').addEventListener('click', async e => {
   if (ds.renomear) { const n = prompt('Novo nome:', d.usuarios[idx(ds.renomear)].nome); if (n) await adm('PUT', '/api/admin/usuarios/' + ds.renomear, { nome: n }); }
   if (ds.senha) { const s = prompt('Nova senha (4 dígitos, nenhum dígito repetido mais de 2 vezes):'); if (s) await adm('PUT', '/api/admin/usuarios/' + ds.senha, { senha: s }); }
   if (ds.apagarU && confirm('Excluir este militar e sua escolha?')) await adm('DELETE', '/api/admin/usuarios/' + ds.apagarU);
+  if (ds.a === 'imprimir') imprimir();
   const l = d.locais.find(x => x.id === (ds.vmais || ds.vmenos || ds.editarL));
   if (ds.vmais) await adm('PUT', '/api/admin/locais/' + l.id, { vagas: l.vagas + 1 });
   if (ds.vmenos && l.vagas > 0) await adm('PUT', '/api/admin/locais/' + l.id, { vagas: l.vagas - 1 });

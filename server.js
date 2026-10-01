@@ -40,6 +40,7 @@ function carregar() {
   try {
     db = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
     db.vinculos = db.vinculos || []; // bancos antigos não tinham vagas fixas
+    marcarVez();
   } catch {
     db = seed();
     salvar();
@@ -97,11 +98,21 @@ function alocacaoAutomatica() {
   return mudou;
 }
 
+// Guarda quando começou a vez de quem está escolhendo (cronômetro na tela).
+// Com as escolhas pausadas não há cronômetro; ao reabrir, ele recomeça do zero.
+function marcarVez() {
+  const atual = pendentes()[0];
+  if (db.pausado || !atual) { db.vez = null; return; }
+  if (db.vez?.id !== atual.id) db.vez = { id: atual.id, desde: Date.now() };
+}
+
 function estadoPublico() {
   const fila = pendentes();
   const nome = id => db.usuarios.find(u => u.id === id)?.nome || '?';
   return {
     pausado: db.pausado,
+    vezDesde: db.vez?.desde || null,
+    agora: Date.now(),
     locais: db.locais.map(l => ({
       id: l.id, om: l.om, cidade: l.cidade, vagas: l.vagas, restantes: restantes(l),
       fixos: db.vinculos.filter(v => v.localId === l.id).map(v => nome(v.usuarioId)),
@@ -128,7 +139,7 @@ function transmitir() {
 }
 setInterval(() => { for (const res of clientes) res.write(': ping\n\n'); }, 25000);
 
-function mudou() { alocacaoAutomatica(); salvar(); transmitir(); }
+function mudou() { alocacaoAutomatica(); marcarVez(); salvar(); transmitir(); }
 
 // ---------------------------------------------------------------- sessões
 const sessoes = new Map(); // token -> { tipo: 'user'|'admin', id }
