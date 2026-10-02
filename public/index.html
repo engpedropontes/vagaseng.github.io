@@ -126,36 +126,33 @@ table{border-collapse:collapse;width:100%}
 .botoes{display:flex;gap:10px;justify-content:flex-end;margin-top:10px;flex-wrap:wrap}
 
 .cron{font-weight:500}
-.so-impressao,.previa,.marca-dagua{display:none}
+#impressao{display:none}
 
-/* impressão do quadro (botão no admin): fundo branco, só quadro e classificação */
-@page{margin:12mm}
+/* impressão do quadro (botão no admin): folhas A4 montadas à parte, em fundo branco.
+   Cada folha tem tamanho fixo e a própria marca d'água, centralizada nela. */
+@page{size:A4 portrait;margin:0}
 @media print{
-  body.imprimir{background:#fff;color:#000;font-size:11px;padding:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-  body.imprimir .wrap{max-width:none;padding:0}
-  body.imprimir h1{font-size:24px}
-  body.imprimir .so-impressao{display:block;margin:4px 0 10px;color:#333}
-  body.imprimir .previa{display:block;margin:0 0 4px;font:700 30px/1 var(--cond);letter-spacing:.2em;color:#000}
-  /* marca d'água: fixa, então se repete em todas as páginas */
-  body.imprimir .marca-dagua{display:flex;position:fixed;inset:0;align-items:center;justify-content:center;pointer-events:none;z-index:100}
-  body.imprimir .marca-dagua span{transform:rotate(-45deg);font:700 120px/1 var(--cond);letter-spacing:.08em;color:rgba(0,0,0,.09);white-space:nowrap}
-  body.imprimir .progresso,body.imprimir #faixa,body.imprimir #minhaArea,body.imprimir .alternar,body.imprimir #admin,
-  body.imprimir .painel h2 label,body.imprimir .cartoes,body.imprimir .acao,body.imprimir #conexao,body.imprimir .fundo{display:none!important}
-  body.imprimir #home,body.imprimir .grade,body.imprimir .grade > *{display:block!important}
-  body.imprimir .quadro{display:table!important}
-  body.imprimir .painel{background:#fff;border:0;margin-bottom:14px}
-  body.imprimir .painel h2,body.imprimir .painel h2 .tit{display:block!important;border:0;padding:10px 0 6px;color:#000}
-  body.imprimir .quadro th,body.imprimir .quadro td{border:1px solid #999;color:#000!important;background:#fff;padding:3px 6px}
-  body.imprimir .quadro th{background:#e8e8e8}
-  body.imprimir .slot.ocup,body.imprimir .slot.ocup.eu,body.imprimir .slot.ocup.fixo{background:#fff;color:#000;outline:0;font-weight:700}
-  body.imprimir .slot.fech{background:#d6d6d6}
-  body.imprimir tr,body.imprimir .fila li{break-inside:avoid}
-  body.imprimir aside{break-before:page}
-  body.imprimir .fila{max-height:none;overflow:visible;columns:2;column-gap:24px}
-  body.imprimir .fila li,body.imprimir .fila li.atual,body.imprimir .fila li.prox{grid-template-columns:28px 1fr 1.3fr;align-items:baseline;background:#fff;color:#000;box-shadow:none;border-bottom:1px solid #ccc;padding:4px 0}
-  body.imprimir .fila .s{grid-column:auto}
-  body.imprimir .fila .n,body.imprimir .fila .s,body.imprimir .fila li.ja .q,body.imprimir .fila li.atual .n,body.imprimir .fila li.atual .s{color:#000}
-  body.imprimir .fila li.voce .q::after{content:none}
+  body.imprimir{background:#fff;color:#000;padding:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  body.imprimir > :not(#impressao){display:none!important}
+  body.imprimir #impressao{display:block}
+  .folha{position:relative;width:210mm;height:296mm;padding:12mm;overflow:hidden;break-after:page;font-size:11px}
+  .folha:last-child{break-after:auto}
+  .folha .previa{margin:0;font:700 30px/1 var(--cond);letter-spacing:.2em}
+  .folha h1{font-size:24px;margin:2px 0 0}
+  .folha .imp-data{margin:4px 0 0;color:#333}
+  .folha h2{font:700 20px/1 var(--cond);margin:14px 0 6px}
+  .marca-dagua{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:2}
+  .marca-dagua span{transform:rotate(-54.7deg);font:700 120px/1 var(--cond);letter-spacing:.08em;color:rgba(0,0,0,.09);white-space:nowrap}
+  #impressao .quadro{display:table!important;table-layout:fixed;width:100%}
+  #impressao .quadro th,#impressao .quadro td{border:1px solid #999;color:#000!important;background:#fff;padding:3px 5px;white-space:normal;overflow-wrap:anywhere;min-width:0}
+  #impressao .quadro th{background:#e8e8e8}
+  #impressao .quadro .slot.ocup{background:#fff;outline:0;font-weight:700}
+  #impressao .quadro .slot.fech{background:#d6d6d6}
+  #impressao .fila{max-height:none;overflow:visible;columns:2;column-gap:24px}
+  #impressao .fila li{grid-template-columns:28px 1fr 1.3fr;align-items:baseline;background:#fff;color:#000;box-shadow:none;border-bottom:1px solid #ccc;padding:4px 0;break-inside:avoid}
+  #impressao .fila .n,#impressao .fila .q,#impressao .fila .s{color:#000}
+  #impressao .fila .s{grid-column:auto}
+  #impressao .fila li.voce .q::after{content:none}
 }
 
 #conexao{position:fixed;bottom:12px;left:50%;transform:translateX(-50%);background:var(--perigo);color:#0A1628;padding:8px 14px;font-weight:600;z-index:60}
@@ -233,7 +230,7 @@ table{border-collapse:collapse;width:100%}
 <body>
 <div class="wrap">
   <header class="topo">
-    <div><p class="previa">PRÉVIA</p><h1>Escolha de OM - Eng EsAO</h1><p class="so-impressao" id="impData"></p></div>
+    <h1>Escolha de OM - Eng EsAO</h1>
     <div class="progresso">
       <span id="contagem">Carregando…</span>
       <div class="barra"><i id="barra" style="width:0"></i></div>
@@ -285,7 +282,7 @@ table{border-collapse:collapse;width:100%}
   </div>
 </div>
 
-<div class="marca-dagua" aria-hidden="true"><span>SIMULAÇÃO</span></div>
+<div id="impressao"></div>
 <div id="conexao" hidden>Reconectando ao servidor…</div>
 
 <script>
@@ -608,7 +605,19 @@ function renderAdmin() {
 function imprimir() {
   render();
   const total = estado.locais.reduce((s, l) => s + l.vagas, 0);
-  $('#impData').textContent = `Situação em ${new Date().toLocaleString('pt-BR')} · ${total - estado.totalRestante} de ${total} vagas preenchidas`;
+  const tabela = $('#quadro').cloneNode(true);
+  tabela.removeAttribute('id');
+  tabela.querySelectorAll('.acao').forEach(c => c.remove());
+  // larguras fixas: OM, cidade e livres; o resto é dividido entre as colunas de militares
+  const nMil = tabela.querySelectorAll('thead th').length - 3;
+  tabela.insertAdjacentHTML('afterbegin', `<colgroup><col style="width:19%"><col style="width:23%"><col style="width:8%">${'<col>'.repeat(nMil)}</colgroup>`);
+  const topo = `<div class="marca-dagua" aria-hidden="true"><span>SIMULAÇÃO</span></div><p class="previa">PRÉVIA</p><h1>Escolha de OM - Eng EsAO</h1>`;
+  $('#impressao').innerHTML = `
+    <section class="folha">${topo}
+      <p class="imp-data">Situação em ${new Date().toLocaleString('pt-BR')} · ${total - estado.totalRestante} de ${total} vagas preenchidas</p>
+      <h2>Quadro de vagas</h2>${tabela.outerHTML}</section>
+    <section class="folha">${topo}
+      <h2>Classificação</h2><ol class="fila">${$('#fila').innerHTML}</ol></section>`;
   document.body.classList.add('imprimir');
   window.print();
 }
