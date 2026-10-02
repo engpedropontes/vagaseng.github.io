@@ -126,7 +126,7 @@ table{border-collapse:collapse;width:100%}
 .botoes{display:flex;gap:10px;justify-content:flex-end;margin-top:10px;flex-wrap:wrap}
 
 .cron{font-weight:500}
-.so-impressao{display:none}
+.so-impressao,.previa,.marca-dagua{display:none}
 
 /* impressão do quadro (botão no admin): fundo branco, só quadro e classificação */
 @page{margin:12mm}
@@ -135,6 +135,10 @@ table{border-collapse:collapse;width:100%}
   body.imprimir .wrap{max-width:none;padding:0}
   body.imprimir h1{font-size:24px}
   body.imprimir .so-impressao{display:block;margin:4px 0 10px;color:#333}
+  body.imprimir .previa{display:block;margin:0 0 4px;font:700 30px/1 var(--cond);letter-spacing:.2em;color:#000}
+  /* marca d'água: fixa, então se repete em todas as páginas */
+  body.imprimir .marca-dagua{display:flex;position:fixed;inset:0;align-items:center;justify-content:center;pointer-events:none;z-index:100}
+  body.imprimir .marca-dagua span{transform:rotate(-45deg);font:700 120px/1 var(--cond);letter-spacing:.08em;color:rgba(0,0,0,.09);white-space:nowrap}
   body.imprimir .progresso,body.imprimir #faixa,body.imprimir #minhaArea,body.imprimir .alternar,body.imprimir #admin,
   body.imprimir .painel h2 label,body.imprimir .cartoes,body.imprimir .acao,body.imprimir #conexao,body.imprimir .fundo{display:none!important}
   body.imprimir #home,body.imprimir .grade,body.imprimir .grade > *{display:block!important}
@@ -229,7 +233,7 @@ table{border-collapse:collapse;width:100%}
 <body>
 <div class="wrap">
   <header class="topo">
-    <div><h1>Escolha de OM - Eng EsAO</h1><p class="so-impressao" id="impData"></p></div>
+    <div><p class="previa">PRÉVIA</p><h1>Escolha de OM - Eng EsAO</h1><p class="so-impressao" id="impData"></p></div>
     <div class="progresso">
       <span id="contagem">Carregando…</span>
       <div class="barra"><i id="barra" style="width:0"></i></div>
@@ -281,6 +285,7 @@ table{border-collapse:collapse;width:100%}
   </div>
 </div>
 
+<div class="marca-dagua" aria-hidden="true"><span>SIMULAÇÃO</span></div>
 <div id="conexao" hidden>Reconectando ao servidor…</div>
 
 <script>
