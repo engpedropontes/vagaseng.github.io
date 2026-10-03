@@ -115,6 +115,8 @@ table{border-collapse:collapse;width:100%}
 .fila li.prox{background:var(--ambar-claro);box-shadow:inset 4px 0 var(--ambar)}
 .fila li.voce .q::after{content:" (você)";font-weight:400}
 .prefs td.ok{color:#8CC0FF}
+.desfazer-x{border:2px solid var(--perigo);background:transparent;color:var(--perigo);font:700 15px/1 var(--corpo);width:30px;height:30px;padding:0}
+.desfazer-x:hover{background:var(--perigo);color:#0A1628}
 .prefs-adm{flex-basis:100%;display:flex;flex-wrap:wrap;gap:8px;align-items:center;border-top:1px dashed var(--ambar);padding-top:10px}
 .prefs-adm small{flex-basis:100%;color:var(--tinta2)}
 .prefs-adm .op{border:2px solid var(--borda);background:var(--papel);color:var(--tinta);padding:7px 12px;font:600 14px/1.2 var(--corpo);text-align:left}
@@ -579,8 +581,9 @@ function renderAdmin() {
         <a class="btn" href="/telao.html" target="_blank" rel="noopener" style="text-decoration:none">Abrir telão</a>
         <label class="btn" style="margin:0">Restaurar backup<input type="file" accept=".json" id="restaurar" hidden></label></div>
       <h2>Histórico de alocações</h2>
-      <div class="rolagem"><table><thead><tr><th>#</th><th>Horário</th><th>Militar</th><th>OM</th><th>Tipo</th></tr></thead><tbody>
-      ${d.historico.map((h, i) => `<tr><td>${i + 1}</td><td>${new Date(h.ts).toLocaleString('pt-BR')}</td><td>${esc(h.nome)}</td><td>${esc(h.local)}</td><td>${h.auto ? 'Automática' : h.admin ? 'Pelo admin' : 'Escolha'}</td></tr>`).reverse().join('') || '<tr><td colspan="5">Nenhuma escolha ainda.</td></tr>'}
+      <div class="rolagem"><table><thead><tr><th>#</th><th>Horário</th><th>Militar</th><th>OM</th><th>Tipo</th><th></th></tr></thead><tbody>
+      ${d.historico.map((h, i) => `<tr><td>${i + 1}</td><td>${new Date(h.ts).toLocaleString('pt-BR')}</td><td>${esc(h.nome)}</td><td>${esc(h.local)}</td><td>${h.auto ? 'Automática' : h.admin ? 'Pelo admin' : 'Escolha'}</td>
+        <td><button class="desfazer-x" data-desfazer-u="${h.usuarioId}" title="Desfazer a escolha de ${esc(h.nome)}" aria-label="Desfazer a escolha de ${esc(h.nome)}">✕</button></td></tr>`).reverse().join('') || '<tr><td colspan="6">Nenhuma escolha ainda.</td></tr>'}
       </tbody></table></div></div>`;
   }
   if (aba === 'militares') {
@@ -722,6 +725,11 @@ $('#admin').addEventListener('click', async e => {
   if (ds.senha) { const s = prompt('Nova senha (4 dígitos, nenhum dígito repetido mais de 2 vezes):'); if (s) await adm('PUT', '/api/admin/usuarios/' + ds.senha, { senha: s }); }
   if (ds.apagarU && confirm('Excluir este militar e sua escolha?')) await adm('DELETE', '/api/admin/usuarios/' + ds.apagarU);
   if (ds.a === 'imprimir') imprimir();
+  if (ds.desfazerU) {
+    const h = d.historico.find(x => x.usuarioId === ds.desfazerU);
+    if (h && confirm(`Desfazer a escolha de ${h.nome} (${h.local})?\n\nEle volta para a fila na posição dele da classificação e as escolhas serão pausadas.`))
+      await adm('POST', '/api/admin/desfazer-escolha', { usuarioId: ds.desfazerU });
+  }
   if (ds.a === 'sincronizar') { t.disabled = true; t.textContent = 'Sincronizando…'; try { await adm('POST', '/api/admin/planilha/sincronizar'); } finally { carregarAdmin(); } }
   const l = d.locais.find(x => x.id === (ds.vmais || ds.vmenos || ds.editarL));
   if (ds.vmais) await adm('PUT', '/api/admin/locais/' + l.id, { vagas: l.vagas + 1 });
