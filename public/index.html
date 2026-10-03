@@ -115,6 +115,13 @@ table{border-collapse:collapse;width:100%}
 .fila li.prox{background:var(--ambar-claro);box-shadow:inset 4px 0 var(--ambar)}
 .fila li.voce .q::after{content:" (você)";font-weight:400}
 .prefs td.ok{color:#8CC0FF}
+.prefs-adm{flex-basis:100%;display:flex;flex-wrap:wrap;gap:8px;align-items:center;border-top:1px dashed var(--ambar);padding-top:10px}
+.prefs-adm small{flex-basis:100%;color:var(--tinta2)}
+.prefs-adm .op{border:2px solid var(--borda);background:var(--papel);color:var(--tinta);padding:7px 12px;font:600 14px/1.2 var(--corpo);text-align:left}
+.prefs-adm .op b{color:var(--ambar);margin-right:4px}
+.prefs-adm .op span{color:var(--tinta2);font-weight:400}
+.prefs-adm button.op:hover{background:var(--oliva-claro);border-color:var(--ambar)}
+.prefs-adm .op.cheia{opacity:.5;text-decoration:line-through}
 .avisos{margin:0;padding:10px 12px 10px 30px;color:var(--ambar);font-size:14px}
 
 /* modal */
@@ -352,9 +359,18 @@ function render() {
   const area = $('#minhaArea');
   if (modoAdm()) {
     // prévia pelas preferências: só existe nos dados do admin
-    const pv = admDados?.classificacao.find(c => c.id === estado.atual.id)?.previa;
+    const dadosAdm = admDados?.classificacao.find(c => c.id === estado.atual.id);
+    const pv = dadosAdm?.previa;
     const porPref = pv?.localId ? `<button class="btn btn-cta escolher" data-local="${pv.localId}">Escolher pela preferência: ${esc(nomeOm(pv.localId))} (${pv.opcao}ª opção)</button>` : '';
-    area.innerHTML = `<div class="meu vez adm-vez"><div class="status"><b>Modo administrador: escolhendo por ${esc(estado.atual.nome)}</b>Toque em "Escolher" na OM desejada. Após confirmar, a vez passa para ${esc(estado.proximo?.nome || 'o próximo')} e você continua escolhendo pelo seguinte.${estado.pausado ? ' As escolhas estão pausadas para os militares, mas o administrador pode escolher.' : ''}${pv?.esgotadas ? ' As OMs da lista de preferências dele já foram preenchidas.' : ''}</div>${porPref}<button class="btn" id="sairAdmHome">Sair do modo admin</button></div>`;
+    // lista completa de preferências do militar da vez, com cada opção livre (clicável) ou cheia
+    const lista = (dadosAdm?.prefs || []).map((id, i) => {
+      const l = estado.locais.find(x => x.id === id); if (!l) return '';
+      return l.restantes > 0
+        ? `<button class="op escolher" data-local="${l.id}"><b>${i + 1}ª</b> ${esc(l.om)} <span>(${esc(l.cidade)}) · ${l.restantes} livre${l.restantes > 1 ? 's' : ''}</span></button>`
+        : `<span class="op cheia"><b>${i + 1}ª</b> ${esc(l.om)} <span>(${esc(l.cidade)}) · cheia</span></span>`;
+    }).join('');
+    area.innerHTML = `<div class="meu vez adm-vez"><div class="status"><b>Modo administrador: escolhendo por ${esc(estado.atual.nome)}</b>Toque em "Escolher" na OM desejada. Após confirmar, a vez passa para ${esc(estado.proximo?.nome || 'o próximo')} e você continua escolhendo pelo seguinte.${estado.pausado ? ' As escolhas estão pausadas para os militares, mas o administrador pode escolher.' : ''}${pv?.esgotadas ? ' As OMs da lista de preferências dele já foram preenchidas.' : ''}</div>${porPref}<button class="btn" id="sairAdmHome">Sair do modo admin</button>
+      ${lista ? `<div class="prefs-adm"><small>Preferências de ${esc(estado.atual.nome)} (planilha):</small>${lista}</div>` : ''}</div>`;
   }
   else if (!eu) area.innerHTML = '';
   else {
