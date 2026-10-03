@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Escolha de OM - Eng EsAO</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏰</text></svg>">
+<link rel="icon" type="image/svg+xml" href="/engenharia.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
@@ -29,11 +29,25 @@ button{cursor:pointer}
 
 /* cabeçalho */
 header.topo{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:14px}
-h1{font:700 clamp(30px,5vw,46px)/1 var(--cond);margin:0;letter-spacing:.01em}
+h1{font:700 clamp(30px,5vw,46px)/1 var(--cond);margin:0;letter-spacing:.01em;display:flex;align-items:center;gap:.35em}
+h1 .insignia{height:1.15em;width:auto;flex:none}
+.credito{margin:28px 0 0;text-align:center;font-size:11px;color:#5D7394}
+.credito a{color:inherit}
 .progresso{font:600 18px/1.2 var(--cond);color:var(--tinta2);text-align:right}
 .barra{height:6px;background:var(--grade);margin-top:6px;width:220px;max-width:60vw}
 .barra i{display:block;height:100%;background:var(--oliva);transition:width .4s}
 .linkadm{color:var(--tinta2);font-size:13px;background:none;border:0;text-decoration:underline;padding:0;margin:0 12px 0 10px}
+
+/* faixa compacta que aparece presa no topo quando a faixa principal sai da tela */
+.faixa-mini{position:fixed;top:0;left:0;right:0;z-index:45;display:flex;gap:14px;align-items:baseline;flex-wrap:wrap;
+  padding:8px 16px;background:var(--turquesa);color:#fff;font:600 16px/1.2 var(--cond);box-shadow:0 2px 12px rgba(0,0,0,.45);
+  transform:translateY(-110%);transition:transform .25s}
+.faixa-mini.on{transform:none}
+.faixa-mini b{font-size:20px}
+.faixa-mini .prox{color:#D7E6FA;font-weight:500}
+.faixa-mini.vez{background:var(--ambar);color:#0A1628}
+.faixa-mini.vez .prox{color:#2E2A12}
+.faixa-mini.pausa{background:#2E2A12;color:var(--ambar)}
 
 /* faixa de vez (elemento central) */
 .faixa{display:grid;grid-template-columns:1.4fr 1fr auto;border:2px solid var(--borda);background:var(--papel);margin-bottom:18px}
@@ -251,9 +265,10 @@ table{border-collapse:collapse;width:100%}
 </style>
 </head>
 <body>
+<div class="faixa-mini" id="faixaMini" aria-hidden="true"></div>
 <div class="wrap">
   <header class="topo">
-    <h1>Escolha de OM - Eng EsAO</h1>
+    <h1><img class="insignia" src="/engenharia.svg" alt="" title="Distintivo da Arma de Engenharia">Escolha de OM - Eng EsAO</h1>
     <div class="progresso">
       <span id="contagem">Carregando…</span>
       <div class="barra"><i id="barra" style="width:0"></i></div>
@@ -307,6 +322,7 @@ table{border-collapse:collapse;width:100%}
 </div>
 
 <div id="impressao"></div>
+<p class="credito">Distintivo da Arma de Engenharia: <a href="https://commons.wikimedia.org/wiki/File:Distintivo_da_Arma_de_Engenharia_-_Ex%C3%A9rcito_Brasileiro.svg" target="_blank" rel="noopener">Diego Biavati</a>, <a href="https://creativecommons.org/licenses/by-sa/4.0/deed.pt-br" target="_blank" rel="noopener">CC BY-SA 4.0</a></p>
 <div id="conexao" hidden>Reconectando ao servidor…</div>
 
 <script>
@@ -365,6 +381,13 @@ function render() {
     <div class="proximo"><small>Próximo</small><strong>${esc(estado.proximo?.nome || '—')}</strong></div>
     <div class="acao">${eu ? `<button class="btn" id="sair">Sair (${esc(eu.nome)})</button>`
                            : `<button class="btn btn-cta" id="entrar">SENHA</button>`}</div>${aviso}`;
+
+  // faixa compacta (aparece presa no topo ao rolar a página)
+  const mini = $('#faixaMini');
+  mini.className = 'faixa-mini' + (mini.classList.contains('on') ? ' on' : '') + (minhaVez() ? ' vez' : estado.pausado || fim ? ' pausa' : '');
+  mini.innerHTML = fim ? '<b>Escolha concluída</b>'
+    : `<span>${minhaVez() ? 'SUA VEZ' : 'Escolhendo agora'}${estado.pausado ? ' (pausado)' : ''}</span><b>${esc(estado.atual?.nome || '—')}</b><span class="cron"></span>`
+      + (estado.proximo ? `<span class="prox">Próximo: ${esc(estado.proximo.nome)}</span>` : '');
 
   // área pessoal
   const area = $('#minhaArea');
@@ -472,6 +495,10 @@ function cronometro() {
   document.querySelectorAll('.cron').forEach(el => el.textContent = txt);
 }
 setInterval(cronometro, 1000);
+
+// mostra a faixa compacta quando a faixa principal sai da tela (só no quadro)
+new IntersectionObserver(([e]) => $('#faixaMini').classList.toggle('on', !e.isIntersecting && !$('#home').hidden))
+  .observe($('#faixa'));
 
 function vista(v) {
   $('#grade').dataset.vista = v;
