@@ -51,7 +51,7 @@ body.sem-cursor{cursor:none}
 .rotulo .om span{color:var(--livre)}
 .rotulo .om.cheio{color:var(--cheio)}
 .rotulo .om.cheio span{color:var(--cheio)}
-.rotulo .quem{font:500 12px/1.2 var(--corpo);color:var(--tinta2);white-space:normal;max-width:190px}
+.rotulo .quem{font:500 12px/1.25 var(--corpo);color:var(--tinta2);white-space:nowrap}
 .rotulo.novo,.pino.novo{animation:novo 1.2s ease-in-out 6}
 .rotulo.novo{border-color:var(--ambar)}
 @keyframes novo{0%,100%{box-shadow:0 0 0 0 rgba(244,196,48,0)}50%{box-shadow:0 0 0 8px rgba(244,196,48,.55)}}
@@ -240,7 +240,7 @@ function desenharMapa() {
     const r = document.createElement('div');
     r.className = 'rotulo' + (it.k === novaCidade ? ' novo' : '');
     r.innerHTML = it.oms.map(l => `<div class="om ${l.restantes ? '' : 'cheio'}"><b>${esc(l.om)}</b><span>${l.restantes}/${l.vagas}</span></div>`
-      + (l.ocupantes.length ? `<div class="quem">${l.ocupantes.map(esc).join(', ')}</div>` : '')).join('');
+      + l.ocupantes.map(n => `<div class="quem">${esc(n)}</div>`).join('')).join(''); // um nome por linha
     r.style.visibility = 'hidden';
     sobre.appendChild(r);
     const w = r.offsetWidth, h = r.offsetHeight;
