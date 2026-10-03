@@ -107,7 +107,9 @@ table{border-collapse:collapse;width:100%}
 .slot.ocup.fixo.eu{background:var(--ambar);outline-color:#0A1628}
 .btn-adm{background:#17B3C9;color:#0A1628;border:2px solid #17B3C9;font:700 17px/1 var(--cond);letter-spacing:.06em;padding:8px 18px}
 .btn-adm:hover{background:#3FCBDD;border-color:#3FCBDD}
-.btn-prefs{background:transparent;color:#17B3C9;margin-right:8px}
+.acoes-topo{margin-top:6px;display:flex;gap:8px;justify-content:flex-end;align-items:center;flex-wrap:wrap}
+.btn-prefs{background:transparent;color:#17B3C9}
+a.btn-prefs{display:inline-block;text-decoration:none}
 .btn-prefs:hover{color:#0A1628}
 .fixos-form select{border:2px solid var(--borda);padding:7px 8px;background:var(--escuro);color:var(--tinta);min-height:40px;max-width:100%}
 .legenda{font-size:13px;color:var(--tinta2);padding:8px 12px;border-top:1px solid var(--grade)}
@@ -255,6 +257,8 @@ table{border-collapse:collapse;width:100%}
   .progresso{width:100%}
   .barra{width:100%;max-width:none}
   .linkadm{margin-left:0;padding:6px 0}
+  .acoes-topo{flex-wrap:nowrap;justify-content:stretch;gap:6px}
+  .acoes-topo .btn-adm{flex:1 1 auto;padding:8px 6px;font-size:15px;letter-spacing:.03em;text-align:center}
   .faixa > div{padding:10px 14px}
   .faixa strong{font-size:26px}
   .meu{padding:12px 14px;gap:10px 14px}
@@ -272,7 +276,7 @@ table{border-collapse:collapse;width:100%}
     <div class="progresso">
       <span id="contagem">Carregando…</span>
       <div class="barra"><i id="barra" style="width:0"></i></div>
-      <div style="margin-top:6px"><button class="linkadm" id="linkHome" hidden>Voltar ao quadro</button><button class="btn btn-adm btn-prefs" id="linkPrefs">PREFERÊNCIAS</button><button class="btn btn-adm" id="linkAdm">ADM</button></div>
+      <div class="acoes-topo"><button class="linkadm" id="linkHome" hidden>Voltar ao quadro</button><a class="btn btn-adm btn-prefs" id="linkTelao" href="/telao.html" target="_blank" rel="noopener">TELÃO</a><button class="btn btn-adm btn-prefs" id="linkPrefs">PREFERÊNCIAS</button><button class="btn btn-adm" id="linkAdm">ADM</button></div>
     </div>
   </header>
 
@@ -366,6 +370,9 @@ const nomeOm = id => { const l = estado.locais.find(x => x.id === id); return l 
 
 function render() {
   if (!estado) return;
+  // botão Preferências só depois de entrar com a senha; quem sai volta ao quadro
+  if (!podeVerPrefs() && !$('#prefs').hidden) { location.hash = ''; tela('home'); }
+  $('#linkPrefs').hidden = !$('#prefs').hidden || !podeVerPrefs();
   const total = estado.locais.reduce((s, l) => s + l.vagas, 0);
   const cheias = total - estado.totalRestante;
   $('#contagem').textContent = `${cheias} de ${total} vagas preenchidas`;
@@ -582,15 +589,20 @@ $('#linkAdm').addEventListener('click', () => admTok ? mostrarAdmin() : abrirLog
 $('#linkHome').addEventListener('click', () => { location.hash = ''; mostrarHome(); });
 $('#linkPrefs').addEventListener('click', () => mostrarPrefs());
 // telas: quadro (home), administração e preferências
+// Preferências: só para quem entrou com a senha (militar) ou é admin
+const podeVerPrefs = () => !!(eu || admTok);
 function tela(qual) {
   for (const t of ['home', 'admin', 'prefs']) $('#' + t).hidden = t !== qual;
   $('#linkHome').hidden = qual === 'home';
   $('#linkAdm').hidden = qual === 'admin';
-  $('#linkPrefs').hidden = qual === 'prefs';
+  $('#linkPrefs').hidden = qual === 'prefs' || !podeVerPrefs();
 }
 function mostrarHome() { setTimeout(render, 0); tela('home'); }
 function mostrarAdmin() { location.hash = 'admin'; tela('admin'); carregarAdmin(); }
-function mostrarPrefs() { location.hash = 'preferencias'; tela('prefs'); carregarPrefs(); }
+function mostrarPrefs() {
+  if (!podeVerPrefs()) { location.hash = ''; mostrarHome(); abrirLogin('user'); return; }
+  location.hash = 'preferencias'; tela('prefs'); carregarPrefs();
+}
 
 async function carregarAdmin() {
   try { admDados = await api('GET', '/api/admin/dados', null, admTok); renderAdmin(); if (modoAdm()) render(); }
@@ -775,7 +787,7 @@ function tabelaPrevia(d) {
 // ------------------------------------------------ página Preferências (só leitura, para todos)
 async function carregarPrefs() {
   try {
-    const d = await api('GET', '/api/preferencias');
+    const d = await api('GET', '/api/preferencias', null, eu ? token : admTok);
     $('#prefs').innerHTML = `<div class="painel">
       <div class="bloco"><div>${d.configurada
         ? `Preferências lidas da planilha da turma. Última atualização: <b>${d.ultimaSync ? new Date(d.ultimaSync).toLocaleString('pt-BR') : '—'}</b>. A prévia muda a cada escolha feita.`
