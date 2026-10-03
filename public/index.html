@@ -144,28 +144,32 @@ table{border-collapse:collapse;width:100%}
 /* impressão do quadro (botão no admin): uma folha para o quadro e outra para a
    classificação, em fundo branco. Cada folha é menor que a área útil da página
    (com folga para as margens de qualquer navegador) e o conteúdo é reduzido
-   para caber nela; a marca d'água fica centralizada em cada folha. */
+   para caber nela; a marca d'água fica centralizada em cada folha.
+   Tamanhos em cqi/em (proporcionais à largura da folha): a medição dos nomes,
+   feita antes de imprimir, continua valendo qualquer que seja a largura real do
+   papel e das margens do navegador. */
 @page{size:A4 portrait;margin:28mm 12mm}
 #impressao{color:#000;background:#fff;font-size:11px}
 #impressao.medindo{display:block;position:absolute;left:-10000px;top:0;width:186mm;visibility:hidden}
-.folha{position:relative;height:236mm;overflow:hidden;break-after:page;break-inside:avoid}
+.folha{position:relative;height:236mm;overflow:hidden;break-after:page;break-inside:avoid;container-type:inline-size}
 .folha:last-child{break-after:auto}
-.folha .conteudo{transform-origin:0 0;padding:1px}
-.folha .previa{margin:0;font:700 30px/1 var(--cond);letter-spacing:.2em}
-.folha h1{font-size:24px;margin:2px 0 0}
-.folha .imp-data{margin:4px 0 0;color:#333}
-.folha h2{font:700 20px/1 var(--cond);margin:14px 0 6px}
+.folha .conteudo{transform-origin:0 0;padding:1px;font-size:1.565cqi} /* = 11px numa folha de 186 mm */
+.folha .previa{margin:0;font:700 2.727em/1 var(--cond);letter-spacing:.2em}
+.folha h1{font-size:2.18em;margin:.1em 0 0}
+.folha .imp-data{margin:.35em 0 0;color:#333}
+.folha h2{font:700 1.818em/1 var(--cond);margin:.7em 0 .3em}
 /* marca d'água: desenho SVG atrás do conteúdo (as células são transparentes),
    o jeito que todos os navegadores imprimem igual */
 .marca-dagua{position:absolute;inset:0;z-index:0;pointer-events:none}
 .marca-dagua svg{display:block;width:100%;height:100%}
 .folha .conteudo{position:relative;z-index:1}
 #impressao .quadro{display:table!important;table-layout:fixed;width:100%}
-#impressao .quadro th,#impressao .quadro td{border:1px solid #999;color:#000!important;background:transparent;padding:3px 5px;white-space:nowrap;overflow:hidden;text-overflow:clip;min-width:0}
-#impressao .quadro th{background:rgba(0,0,0,.08)}
+#impressao .quadro th,#impressao .quadro td{border:1px solid #999;color:#000!important;background:transparent;padding:.27em .45em;white-space:nowrap;overflow:hidden;text-overflow:clip;min-width:0}
+#impressao .quadro th{background:rgba(0,0,0,.08);font-size:1.364em}
+#impressao .quadro td.slot{font-size:1.364em}
 #impressao .quadro .slot.ocup{background:transparent;outline:0;font-weight:700}
 #impressao .quadro .slot.fech{background:rgba(0,0,0,.16)}
-#impressao .classif td{text-align:left;padding:2px 6px}
+#impressao .classif td{text-align:left;padding:.18em .55em}
 #impressao .classif td:first-child{text-align:center}
 @media print{
   body.imprimir{background:#fff;color:#000;padding:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}
@@ -705,9 +709,10 @@ function imprimir() {
   // reduz o conteúdo de cada folha até caber nela (mede fora da tela, na largura da página)
   const imp = $('#impressao');
   imp.classList.add('medindo');
-  imp.querySelectorAll('.quadro td, .classif td').forEach(td => {
-    let t = parseFloat(getComputedStyle(td).fontSize);
-    while (td.scrollWidth > td.clientWidth && t > 6) td.style.fontSize = (t -= 0.5) + 'px';
+  // nome que não cabe: reduz a letra até caber (em cqi, para valer em qualquer largura de papel)
+  imp.querySelectorAll('#impressao th, #impressao td').forEach(td => {
+    const W = td.closest('.folha').clientWidth, px = parseFloat(getComputedStyle(td).fontSize);
+    for (let f = 1; td.scrollWidth > td.clientWidth && f > 0.4; ) td.style.fontSize = (px * (f -= 0.04) * 100 / W).toFixed(3) + 'cqi';
   });
   imp.querySelectorAll('.folha').forEach(f => {
     const c = f.querySelector('.conteudo');
