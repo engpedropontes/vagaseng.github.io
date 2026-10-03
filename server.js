@@ -311,8 +311,11 @@ async function rotear(req, res) {
   // ---- público
   if (rota === 'GET /api/estado') return json(res, 200, estadoPublico());
 
-  // página "Preferências": prévia pela planilha, só leitura (link e sincronização ficam com o admin)
+  // página "Preferências": prévia pela planilha, só leitura, para quem entrou com a senha
+  // (militar ou admin); o link da planilha e a sincronização ficam com o admin
   if (rota === 'GET /api/preferencias') {
+    const logado = sessao?.tipo === 'admin' || (sessao?.tipo === 'user' && db.usuarios.some(u => u.id === sessao.id));
+    if (!logado) return erro(res, 401, 'Entre com sua senha para ver as preferências.');
     const { locais, classificacao } = comPreferencias(estadoPublico());
     return json(res, 200, { locais, classificacao, ultimaSync: db.planilha?.ultimaSync || null, configurada: !!db.planilha?.url });
   }

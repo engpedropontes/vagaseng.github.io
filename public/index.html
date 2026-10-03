@@ -366,6 +366,9 @@ const nomeOm = id => { const l = estado.locais.find(x => x.id === id); return l 
 
 function render() {
   if (!estado) return;
+  // botão Preferências só depois de entrar com a senha; quem sai volta ao quadro
+  if (!podeVerPrefs() && !$('#prefs').hidden) { location.hash = ''; tela('home'); }
+  $('#linkPrefs').hidden = !$('#prefs').hidden || !podeVerPrefs();
   const total = estado.locais.reduce((s, l) => s + l.vagas, 0);
   const cheias = total - estado.totalRestante;
   $('#contagem').textContent = `${cheias} de ${total} vagas preenchidas`;
@@ -582,15 +585,20 @@ $('#linkAdm').addEventListener('click', () => admTok ? mostrarAdmin() : abrirLog
 $('#linkHome').addEventListener('click', () => { location.hash = ''; mostrarHome(); });
 $('#linkPrefs').addEventListener('click', () => mostrarPrefs());
 // telas: quadro (home), administração e preferências
+// Preferências: só para quem entrou com a senha (militar) ou é admin
+const podeVerPrefs = () => !!(eu || admTok);
 function tela(qual) {
   for (const t of ['home', 'admin', 'prefs']) $('#' + t).hidden = t !== qual;
   $('#linkHome').hidden = qual === 'home';
   $('#linkAdm').hidden = qual === 'admin';
-  $('#linkPrefs').hidden = qual === 'prefs';
+  $('#linkPrefs').hidden = qual === 'prefs' || !podeVerPrefs();
 }
 function mostrarHome() { setTimeout(render, 0); tela('home'); }
 function mostrarAdmin() { location.hash = 'admin'; tela('admin'); carregarAdmin(); }
-function mostrarPrefs() { location.hash = 'preferencias'; tela('prefs'); carregarPrefs(); }
+function mostrarPrefs() {
+  if (!podeVerPrefs()) { location.hash = ''; mostrarHome(); abrirLogin('user'); return; }
+  location.hash = 'preferencias'; tela('prefs'); carregarPrefs();
+}
 
 async function carregarAdmin() {
   try { admDados = await api('GET', '/api/admin/dados', null, admTok); renderAdmin(); if (modoAdm()) render(); }
@@ -775,7 +783,7 @@ function tabelaPrevia(d) {
 // ------------------------------------------------ página Preferências (só leitura, para todos)
 async function carregarPrefs() {
   try {
-    const d = await api('GET', '/api/preferencias');
+    const d = await api('GET', '/api/preferencias', null, eu ? token : admTok);
     $('#prefs').innerHTML = `<div class="painel">
       <div class="bloco"><div>${d.configurada
         ? `Preferências lidas da planilha da turma. Última atualização: <b>${d.ultimaSync ? new Date(d.ultimaSync).toLocaleString('pt-BR') : '—'}</b>. A prévia muda a cada escolha feita.`
