@@ -162,11 +162,8 @@ table{border-collapse:collapse;width:100%}
 #impressao .quadro th{background:#e8e8e8}
 #impressao .quadro .slot.ocup{background:#fff;outline:0;font-weight:700}
 #impressao .quadro .slot.fech{background:#d6d6d6}
-#impressao .fila{max-height:none;overflow:visible;columns:2;column-gap:24px}
-#impressao .fila li{grid-template-columns:28px 1fr 1.3fr;align-items:baseline;background:#fff;color:#000;box-shadow:none;border-bottom:1px solid #ccc;padding:4px 0;break-inside:avoid}
-#impressao .fila .n,#impressao .fila .q,#impressao .fila .s{color:#000;white-space:nowrap;overflow:hidden}
-#impressao .fila .s{grid-column:auto}
-#impressao .fila li.voce .q::after{content:none}
+#impressao .classif td{text-align:left;padding:2px 6px}
+#impressao .classif td:first-child{text-align:center}
 @media print{
   body.imprimir{background:#fff;color:#000;padding:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}
   body.imprimir > :not(#impressao){display:none!important}
@@ -671,6 +668,16 @@ function renderAdmin() {
 }
 
 // Imprime (ou salva em PDF) o quadro e a classificação em fundo branco
+// Classificação para a impressão: uma coluna só, larga, para OM e cidade caberem inteiras
+function tabelaClassificacao() {
+  const situacao = c => c.localId ? (c.fixo ? 'Vaga fixa: ' : '') + nomeOm(c.localId)
+    : estado.atual?.id === c.id ? 'Escolhendo agora' : estado.proximo?.id === c.id ? 'Próximo' : 'Aguardando';
+  return `<table class="quadro classif"><colgroup><col style="width:8%"><col style="width:32%"><col></colgroup>
+    <thead><tr><th>Pos</th><th>Militar</th><th>Situação</th></tr></thead><tbody>
+    ${estado.classificacao.map(c => `<tr><td>${c.pos}º</td><td class="om">${esc(c.nome)}</td><td class="cid">${esc(situacao(c))}</td></tr>`).join('')}
+    </tbody></table>`;
+}
+
 function imprimir() {
   render();
   const total = estado.locais.reduce((s, l) => s + l.vagas, 0);
@@ -687,7 +694,7 @@ function imprimir() {
       <p class="imp-data">Situação em ${new Date().toLocaleString('pt-BR')} · ${total - estado.totalRestante} de ${total} vagas preenchidas</p>
       <h2>Quadro de vagas</h2>${tabela.outerHTML}</div></section>
     <section class="folha">${marca}<div class="conteudo">${topo}
-      <h2>Classificação</h2><ol class="fila">${$('#fila').innerHTML}</ol></div></section>`;
+      <h2>Classificação</h2>${tabelaClassificacao()}</div></section>`;
   // reduz o conteúdo de cada folha até caber nela (mede fora da tela, na largura da página)
   const imp = $('#impressao');
   imp.classList.add('medindo');
