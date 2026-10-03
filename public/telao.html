@@ -1,0 +1,353 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Telão - Escolha de OM</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏰</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* Telão: página para TV/projetor. Sem botões; atualiza sozinha.
+   Clique em qualquer lugar para tela cheia. */
+:root{
+  --campo:#0A1628; --papel:#11233D; --tinta:#E3EBF6; --tinta2:#93A8C4; --borda:#2F4E78;
+  --oliva:#1F5A9E; --turquesa:#2F74C6; --ambar:#F4C430; --ambar-claro:#2E2A12; --grade:#223C60;
+  --livre:#3FCB7E; --cheio:#5D7394;
+  --cond:"Barlow Condensed","Arial Narrow",Arial,sans-serif;
+  --corpo:"Barlow","Segoe UI",Roboto,Arial,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden}
+body{background:var(--campo);color:var(--tinta);font:400 16px/1.35 var(--corpo);cursor:default}
+body.sem-cursor{cursor:none}
+
+.tela{display:grid;grid-template-rows:auto minmax(0,1fr);height:100vh;padding:1.6vh 1.4vw;gap:1.4vh}
+.topo{display:flex;align-items:center;gap:2vw}
+.topo h1{font:700 clamp(22px,3.4vh,44px)/1 var(--cond);margin:0;flex:1}
+.progresso{font:600 clamp(16px,2.4vh,30px)/1 var(--cond);color:var(--tinta2);text-align:right}
+.barra{height:.8vh;min-height:5px;background:var(--grade);margin-top:.6vh;width:22vw}
+.barra i{display:block;height:100%;background:var(--ambar);transition:width .6s}
+.relogio{font:700 clamp(22px,3.4vh,44px)/1 var(--cond);font-variant-numeric:tabular-nums}
+
+.corpo{display:grid;grid-template-columns:minmax(0,1fr) 30vw;gap:1.4vw;min-height:0}
+
+/* mapa */
+.mapa-box{position:relative;border:2px solid var(--borda);background:#0B1A2E;min-height:0;overflow:hidden}
+#mapa{position:absolute;inset:0;width:100%;height:100%}
+#mapa .uf{fill:#13294A;stroke:#4F75A8;stroke-width:1.2;stroke-linejoin:round}
+#mapa .sigla{fill:#6F8DB5;opacity:.55;font:700 15px var(--cond);text-anchor:middle;dominant-baseline:central;letter-spacing:.05em}
+.fonte{position:absolute;right:8px;bottom:4px;z-index:600;font:400 10px var(--corpo);color:#5D7394}
+#sobre{position:absolute;inset:0;pointer-events:none;z-index:500}
+#sobre svg{position:absolute;inset:0;width:100%;height:100%}
+.pino{position:absolute;transform:translate(-50%,-50%);border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font:700 14px/1 var(--cond);color:#0A1628;background:var(--livre);border:2px solid #0A1628;box-shadow:0 0 0 2px rgba(63,203,126,.35)}
+.pino.cheio{background:var(--cheio);color:#0A1628;box-shadow:none}
+.rotulo{position:absolute;background:rgba(10,22,40,.88);border:1px solid var(--borda);padding:3px 7px;white-space:nowrap;
+  font:600 13px/1.2 var(--cond)}
+.rotulo .om{display:flex;gap:8px;justify-content:space-between}
+.rotulo .om b{font-weight:700}
+.rotulo .om span{color:var(--livre)}
+.rotulo .om.cheio{color:var(--cheio)}
+.rotulo .om.cheio span{color:var(--cheio)}
+.rotulo .quem{font:500 12px/1.25 var(--corpo);color:var(--tinta2);white-space:nowrap}
+.rotulo.novo,.pino.novo{animation:novo 1.2s ease-in-out 6}
+.rotulo.novo{border-color:var(--ambar)}
+@keyframes novo{0%,100%{box-shadow:0 0 0 0 rgba(244,196,48,0)}50%{box-shadow:0 0 0 8px rgba(244,196,48,.55)}}
+.legenda-mapa{position:absolute;left:10px;bottom:10px;z-index:600;background:rgba(10,22,40,.85);border:1px solid var(--borda);
+  padding:6px 10px;font:500 13px/1.4 var(--corpo);color:var(--tinta2)}
+.legenda-mapa i{display:inline-block;width:11px;height:11px;border-radius:50%;margin:0 5px -1px 0;border:1px solid #0A1628}
+.sem-local{position:absolute;right:10px;bottom:24px;z-index:600;background:rgba(10,22,40,.85);border:1px solid var(--borda);
+  padding:6px 10px;font:500 13px/1.4 var(--corpo);color:var(--tinta2);max-width:40%}
+.sem-local:empty{display:none}
+
+/* faixa de nova escolha, por cima do mapa */
+.anuncio{position:absolute;left:50%;top:14px;transform:translate(-50%,calc(-100% - 30px));z-index:700;background:var(--ambar);color:#0A1628;
+  padding:10px 22px;font:700 clamp(20px,3vh,38px)/1.1 var(--cond);white-space:nowrap;transition:transform .5s;max-width:96%;
+  overflow:hidden;text-overflow:ellipsis}
+.anuncio.on{transform:translate(-50%,0)}
+
+/* painel lateral */
+.lado{display:flex;flex-direction:column;gap:1.4vh;min-height:0}
+.cartao{border:2px solid var(--borda);background:var(--papel);padding:1.4vh 1.2vw}
+.cartao small{display:block;font:600 clamp(14px,2vh,24px)/1 var(--cond);color:var(--tinta2);letter-spacing:.04em;margin-bottom:.8vh}
+.agora{background:var(--turquesa);border-color:var(--turquesa);color:#fff}
+.agora small{color:#fff;opacity:.85}
+.agora .nome{font:700 clamp(34px,7vh,92px)/1 var(--cond);overflow-wrap:anywhere}
+.agora .linha{display:flex;justify-content:space-between;align-items:baseline;margin-top:1vh;font:600 clamp(18px,3vh,38px)/1 var(--cond)}
+.agora .cron{font-variant-numeric:tabular-nums}
+.proximo .nome{font:700 clamp(24px,4.4vh,56px)/1 var(--cond);color:var(--tinta2)}
+.aviso{background:var(--ambar-claro);border-color:var(--ambar);font:700 clamp(18px,2.8vh,34px)/1.15 var(--cond)}
+.aviso:empty{display:none}
+.ultimas{flex:1;min-height:0;overflow:hidden}
+.ultimas ol{list-style:none;margin:0;padding:0}
+.ultimas li{padding:.9vh 0;border-bottom:1px solid var(--grade);font:600 clamp(16px,2.4vh,30px)/1.15 var(--cond)}
+.ultimas li:first-child{color:var(--ambar)}
+.ultimas li span{display:block;font:500 clamp(13px,1.8vh,22px)/1.2 var(--corpo);color:var(--tinta2)}
+.ultimas li:first-child span{color:var(--tinta)}
+.vazio{color:var(--tinta2);font:500 clamp(14px,2vh,24px)/1.3 var(--corpo)}
+
+#conexao{position:fixed;bottom:12px;left:50%;transform:translateX(-50%);background:#FF8A7A;color:#0A1628;padding:8px 14px;font-weight:600;z-index:900}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="tela">
+  <header class="topo">
+    <h1>Escolha de OM - Eng EsAO</h1>
+    <div class="progresso"><span id="contagem">Carregando…</span><div class="barra"><i id="barra" style="width:0"></i></div></div>
+    <div class="relogio" id="relogio"></div>
+  </header>
+  <div class="corpo">
+    <div class="mapa-box">
+      <svg id="mapa" aria-hidden="true"></svg>
+      <div id="sobre"><svg id="linhas"></svg></div>
+      <div class="anuncio" id="anuncio"></div>
+      <div class="legenda-mapa"><i style="background:var(--livre)"></i>com vaga (número = vagas livres) &nbsp; <i style="background:var(--cheio)"></i>completa</div>
+      <div class="sem-local" id="semLocal"></div>
+      <div class="fonte">Malha: IBGE · Municípios: IBGE (lista kelvins/municipios-brasileiros)</div>
+    </div>
+    <aside class="lado">
+      <div class="cartao agora"><small>ESCOLHENDO AGORA</small><div class="nome" id="agoraNome">—</div>
+        <div class="linha"><span id="agoraPos"></span><span class="cron" id="cron"></span></div></div>
+      <div class="cartao proximo"><small>PRÓXIMO</small><div class="nome" id="proxNome">—</div></div>
+      <div class="cartao aviso" id="aviso"></div>
+      <div class="cartao ultimas"><small>ÚLTIMAS ESCOLHAS</small><ol id="ultimas"></ol></div>
+    </aside>
+  </div>
+</div>
+<div id="conexao" hidden>Reconectando ao servidor…</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+// Localização automática: a cidade é procurada pelo nome na lista de municípios do IBGE
+// (municipios.json), no formato "Cidade-UF" (também aceita "Cidade/UF" ou "Cidade - UF").
+const norm = t => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+  .replace(/['’`]/g, '').replace(/[-\s]+/g, ' ').trim();
+let municipios = null, porNome = null;
+function localizar(cidade) {
+  if (!municipios) return null;
+  const m = String(cidade || '').trim().match(/^(.*?)\s*[-/,\s]\s*([A-Za-z]{2})$/);
+  if (m) { const r = municipios.get(norm(m[1]) + '|' + m[2].toUpperCase()); if (r) return r; }
+  const so = porNome.get(norm(m ? m[1] : cidade)); // sem UF (ou UF errada): só se o nome for único no país
+  return so && so.length === 1 ? so[0] : null;
+}
+const chave = c => { const r = localizar(c); return r ? r.join(',') : null; };
+
+let estado = null, difRelogio = 0, ultimoHist = null, novaCidade = null, timerNovo = null;
+
+// ------------------------------------------------ mapa
+// Mapa desenhado aqui mesmo (SVG), com a malha dos estados do IBGE. Pinos e rótulos
+// ficam por cima, para os rótulos poderem se afastar uns dos outros sem sobrepor.
+let estados = null, proj = null;
+const LIMITES = { oeste: -74.2, leste: -34.6, norte: 5.4, sul: -33.9 };
+const merc = lat => Math.log(Math.tan(Math.PI / 4 + lat * Math.PI / 360));
+function projecao() {
+  const box = $('#sobre'), W = box.clientWidth, H = box.clientHeight, pad = 18;
+  const x0 = LIMITES.oeste, x1 = LIMITES.leste, y0 = merc(LIMITES.norte), y1 = merc(LIMITES.sul);
+  const k = Math.min((W - 2 * pad) / ((x1 - x0) * Math.PI / 180), (H - 2 * pad) / (y0 - y1));
+  const ox = (W - (x1 - x0) * Math.PI / 180 * k) / 2, oy = (H - (y0 - y1) * k) / 2;
+  proj = ([lat, lon]) => ({ x: ox + (lon - x0) * Math.PI / 180 * k, y: oy + (y0 - merc(lat)) * k });
+}
+const ponto = ll => proj(ll);
+function desenharEstados() {
+  if (!estados) return;
+  projecao();
+  const caminho = anel => 'M' + anel.map(([lon, lat]) => { const p = proj([lat, lon]); return p.x.toFixed(1) + ',' + p.y.toFixed(1); }).join('L') + 'Z';
+  let svg = '', siglas = '';
+  for (const f of estados.features) {
+    const polis = f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates;
+    svg += `<path class="uf" d="${polis.map(p => p.map(caminho).join('')).join('')}"/>`;
+    // sigla no centro do maior polígono do estado
+    const anel = polis.map(p => p[0]).sort((a, b) => area(b) - area(a))[0];
+    const c = centro(anel), p = proj([c[1], c[0]]);
+    siglas += `<text class="sigla" x="${p.x.toFixed(1)}" y="${p.y.toFixed(1)}">${f.properties.uf}</text>`;
+  }
+  $('#mapa').innerHTML = svg + siglas;
+}
+function area(a) { let s = 0; for (let i = 0, j = a.length - 1; i < a.length; j = i++) s += (a[j][0] + a[i][0]) * (a[j][1] - a[i][1]); return Math.abs(s / 2); }
+function centro(a) {
+  let x = 0, y = 0, s = 0;
+  for (let i = 0, j = a.length - 1; i < a.length; j = i++) {
+    const f = a[j][0] * a[i][1] - a[i][0] * a[j][1];
+    x += (a[j][0] + a[i][0]) * f; y += (a[j][1] + a[i][1]) * f; s += f;
+  }
+  return [x / (3 * s), y / (3 * s)];
+}
+
+function desenharMapa() {
+  if (!estado || !proj) return;
+  const sobre = $('#sobre'), svg = $('#linhas');
+  sobre.querySelectorAll('.pino,.rotulo').forEach(e => e.remove());
+  svg.innerHTML = '';
+  const W = sobre.clientWidth, H = sobre.clientHeight;
+
+  // agrupa as OMs (com vaga prevista) por cidade
+  const grupos = new Map(), semLocal = [];
+  for (const l of estado.locais) {
+    if (l.vagas === 0) continue;
+    const ll = localizar(l.cidade);
+    if (!ll) { semLocal.push(`${l.om} (${l.cidade || 'sem cidade'})`); continue; }
+    const k = ll.join(',');
+    if (!grupos.has(k)) grupos.set(k, { ll, oms: [] });
+    grupos.get(k).oms.push(l);
+  }
+  $('#semLocal').innerHTML = semLocal.length ? `Fora do mapa (cidade não encontrada; use o formato Cidade-UF): ${semLocal.map(esc).join(', ')}` : '';
+
+  const itens = [...grupos.entries()].map(([k, g]) => {
+    const livres = g.oms.reduce((s, l) => s + l.restantes, 0);
+    return { k, ...g, livres, p: ponto(g.ll) };
+  });
+  const R = 11;
+  // cidades muito próximas: afasta os pinos até não se sobreporem; uma linha curta liga ao ponto real
+  itens.forEach(it => it.q = { ...it.p });
+  for (let volta = 0; volta < 60; volta++) {
+    let mexeu = false;
+    for (let i = 0; i < itens.length; i++) for (let j = i + 1; j < itens.length; j++) {
+      const a = itens[i].q, b = itens[j].q;
+      let dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy);
+      if (d >= 2 * R + 3) continue;
+      if (d < .01) { dx = 1; dy = 0; d = 1; }
+      const m = (2 * R + 3 - d) / 2;
+      a.x -= dx / d * m; a.y -= dy / d * m; b.x += dx / d * m; b.y += dy / d * m;
+      mexeu = true;
+    }
+    if (!mexeu) break;
+  }
+  // legenda e aviso de "fora do mapa" também são obstáculos para os rótulos
+  const caixa = sobre.getBoundingClientRect();
+  const ocupado = [...document.querySelectorAll('.legenda-mapa,.sem-local')].filter(e => e.offsetWidth)
+    .map(e => { const r = e.getBoundingClientRect(); return { x: r.left - caixa.left - 4, y: r.top - caixa.top - 4, w: r.width + 8, h: r.height + 8 }; });
+  for (const it of itens) {
+    if (Math.hypot(it.q.x - it.p.x, it.q.y - it.p.y) > 1) {
+      svg.insertAdjacentHTML('beforeend', `<line x1="${it.p.x}" y1="${it.p.y}" x2="${it.q.x}" y2="${it.q.y}" stroke="#E3EBF6" stroke-width="1.5"/><circle cx="${it.p.x}" cy="${it.p.y}" r="2.5" fill="#E3EBF6"/>`);
+    }
+    const d = document.createElement('div');
+    d.className = 'pino' + (it.livres ? '' : ' cheio') + (it.k === novaCidade ? ' novo' : '');
+    d.style.cssText = `left:${it.q.x}px;top:${it.q.y}px;width:${2 * R}px;height:${2 * R}px`;
+    d.textContent = it.livres || '✓';
+    sobre.appendChild(d);
+    ocupado.push({ x: it.q.x - R - 2, y: it.q.y - R - 2, w: 2 * R + 4, h: 2 * R + 4 });
+  }
+
+  // rótulos: primeiro os das regiões mais cheias de pinos, que têm menos opções de lugar
+  const vizinhos = it => itens.filter(o => Math.hypot(o.q.x - it.q.x, o.q.y - it.q.y) < 140).length;
+  itens.sort((a, b) => vizinhos(b) - vizinhos(a));
+  for (const it of itens) {
+    const r = document.createElement('div');
+    r.className = 'rotulo' + (it.k === novaCidade ? ' novo' : '');
+    r.innerHTML = it.oms.map(l => `<div class="om ${l.restantes ? '' : 'cheio'}"><b>${esc(l.om)}</b><span>${l.restantes}/${l.vagas}</span></div>`
+      + l.ocupantes.map(n => `<div class="quem">${esc(n)}</div>`).join('')).join(''); // um nome por linha
+    r.style.visibility = 'hidden';
+    sobre.appendChild(r);
+    const w = r.offsetWidth, h = r.offsetHeight;
+    let melhor = null;
+    for (const dist of [R + 6, R + 34, R + 70, R + 110]) {
+      const cands = [
+        [it.q.x + dist, it.q.y - h / 2], [it.q.x - dist - w, it.q.y - h / 2],
+        [it.q.x - w / 2, it.q.y - dist - h], [it.q.x - w / 2, it.q.y + dist],
+        [it.q.x + dist * .7, it.q.y - dist * .7 - h], [it.q.x - dist * .7 - w, it.q.y - dist * .7 - h],
+        [it.q.x + dist * .7, it.q.y + dist * .7], [it.q.x - dist * .7 - w, it.q.y + dist * .7],
+      ];
+      for (const [x, y] of cands) {
+        const fora = Math.max(0, -x) + Math.max(0, x + w - W) + Math.max(0, -y) + Math.max(0, y + h - H);
+        const sobrep = ocupado.reduce((s, o) => s + Math.max(0, Math.min(x + w, o.x + o.w) - Math.max(x, o.x)) * Math.max(0, Math.min(y + h, o.y + o.h) - Math.max(y, o.y)), 0);
+        const custo = sobrep + fora * 1000 + dist * 2;
+        if (!melhor || custo < melhor.custo) melhor = { x, y, custo, dist };
+      }
+      if (melhor.custo <= dist * 2) break; // achou lugar livre nesta distância
+    }
+    r.style.left = melhor.x + 'px'; r.style.top = melhor.y + 'px'; r.style.visibility = '';
+    ocupado.push({ x: melhor.x - 3, y: melhor.y - 3, w: w + 6, h: h + 6 });
+    if (melhor.dist > R + 6) { // rótulo afastado: liga ao pino com uma linha
+      const cx = Math.max(melhor.x, Math.min(it.q.x, melhor.x + w)), cy = Math.max(melhor.y, Math.min(it.q.y, melhor.y + h));
+      svg.insertAdjacentHTML('beforeend', `<line x1="${it.q.x}" y1="${it.q.y}" x2="${cx}" y2="${cy}" stroke="#93A8C4" stroke-width="1.2" opacity=".7"/>`);
+    }
+  }
+}
+
+// ------------------------------------------------ painel
+function render() {
+  const total = estado.locais.reduce((s, l) => s + l.vagas, 0), cheias = total - estado.totalRestante;
+  $('#contagem').textContent = `${cheias} de ${total} vagas preenchidas`;
+  $('#barra').style.width = total ? (cheias / total * 100) + '%' : 0;
+  const pos = id => estado.classificacao.find(c => c.id === id)?.pos;
+  $('#agoraNome').textContent = estado.atual?.nome || '—';
+  $('#agoraPos').textContent = estado.atual ? `${pos(estado.atual.id)}º da classificação` : '';
+  $('#proxNome').textContent = estado.proximo?.nome || '—';
+  $('#aviso').textContent = !estado.atual ? 'Escolha concluída: todos os militares foram alocados.'
+    : estado.pausado ? 'Escolhas pausadas pela administração.' : '';
+  const h = estado.historico.slice(-6).reverse();
+  $('#ultimas').innerHTML = h.map(x => `<li>${esc(x.nome)}<span>${esc(x.local)}${x.auto ? ' · automática' : ''}</span></li>`).join('')
+    || '<li class="vazio">Nenhuma escolha ainda.</li>';
+
+  // nova escolha: faixa por cima do mapa e destaque da cidade
+  const n = estado.historico.length;
+  if (ultimoHist !== null && n > ultimoHist) {
+    const x = estado.historico[n - 1];
+    const l = estado.locais.find(l => `${l.om} (${l.cidade})` === x.local);
+    novaCidade = l ? chave(l.cidade) : null;
+    $('#anuncio').textContent = `${x.nome} → ${x.local}`;
+    $('#anuncio').classList.add('on');
+    clearTimeout(timerNovo);
+    timerNovo = setTimeout(() => { $('#anuncio').classList.remove('on'); novaCidade = null; desenharMapa(); }, 9000);
+  }
+  ultimoHist = n;
+  desenharMapa();
+  relogios();
+}
+
+function relogios() {
+  $('#relogio').textContent = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  let txt = '';
+  if (estado?.vezDesde && estado.atual && !estado.pausado) {
+    const seg = Math.max(0, Math.floor((Date.now() - difRelogio - estado.vezDesde) / 1000));
+    const h = Math.floor(seg / 3600), m = Math.floor(seg / 60) % 60, s = String(seg % 60).padStart(2, '0');
+    txt = 'há ' + (h ? `${h}h${String(m).padStart(2, '0')}` : `${m}:${s}`);
+  }
+  $('#cron').textContent = txt;
+}
+setInterval(relogios, 1000);
+
+// ------------------------------------------------ tempo real
+function conectar() {
+  const es = new EventSource('/api/eventos');
+  es.onopen = () => $('#conexao').hidden = true;
+  es.onerror = () => $('#conexao').hidden = false;
+  es.onmessage = e => { estado = JSON.parse(e.data); difRelogio = Date.now() - estado.agora; render(); };
+}
+
+// tela cheia ao clicar; esconde o cursor parado; mantém a tela acesa quando o navegador permite
+document.addEventListener('click', () => { if (!document.fullscreenElement) document.documentElement.requestFullscreen?.().catch(() => {}); });
+let tCursor;
+document.addEventListener('mousemove', () => { document.body.classList.remove('sem-cursor'); clearTimeout(tCursor); tCursor = setTimeout(() => document.body.classList.add('sem-cursor'), 3000); });
+async function manterAcesa() { try { await navigator.wakeLock?.request('screen'); } catch {} }
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') manterAcesa(); });
+manterAcesa();
+
+let tRedim;
+window.addEventListener('resize', () => { clearTimeout(tRedim); tRedim = setTimeout(() => { desenharEstados(); desenharMapa(); }, 200); });
+
+// carrega a malha dos estados e a lista de municípios (arquivos do próprio site) e conecta
+(async () => {
+  try {
+    const [uf, mun] = await Promise.all([fetch('/brasil-uf.json').then(r => r.json()), fetch('/municipios.json').then(r => r.json())]);
+    estados = uf;
+    municipios = new Map(); porNome = new Map();
+    for (const [nome, sigla, lat, lon] of mun) {
+      const ll = [lat, lon], n = norm(nome);
+      municipios.set(n + '|' + sigla, ll);
+      if (!porNome.has(n)) porNome.set(n, []);
+      porNome.get(n).push(ll);
+    }
+    desenharEstados();
+  } catch (e) { $('#semLocal').textContent = 'Não foi possível carregar o mapa.'; }
+  if (estado) render();
+})();
+conectar();
+</script>
+</body>
+</html>

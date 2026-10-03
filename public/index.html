@@ -114,6 +114,15 @@ table{border-collapse:collapse;width:100%}
 .fila li.atual .n,.fila li.atual .s{color:#fff}
 .fila li.prox{background:var(--ambar-claro);box-shadow:inset 4px 0 var(--ambar)}
 .fila li.voce .q::after{content:" (você)";font-weight:400}
+.prefs td.ok{color:#8CC0FF}
+.prefs-adm{flex-basis:100%;display:flex;flex-wrap:wrap;gap:8px;align-items:center;border-top:1px dashed var(--ambar);padding-top:10px}
+.prefs-adm small{flex-basis:100%;color:var(--tinta2)}
+.prefs-adm .op{border:2px solid var(--borda);background:var(--papel);color:var(--tinta);padding:7px 12px;font:600 14px/1.2 var(--corpo);text-align:left}
+.prefs-adm .op b{color:var(--ambar);margin-right:4px}
+.prefs-adm .op span{color:var(--tinta2);font-weight:400}
+.prefs-adm button.op:hover{background:var(--oliva-claro);border-color:var(--ambar)}
+.prefs-adm .op.cheia{opacity:.5;text-decoration:line-through}
+.avisos{margin:0;padding:10px 12px 10px 30px;color:var(--ambar);font-size:14px}
 
 /* modal */
 .fundo{position:fixed;inset:0;background:rgba(3,9,20,.72);display:flex;align-items:center;justify-content:center;padding:16px;z-index:50}
@@ -317,13 +326,16 @@ function conectar() {
     estado = JSON.parse(e.data);
     difRelogio = Date.now() - estado.agora;
     render();
-    if (admTok && !$('#admin').hidden) carregarAdmin();
+    if (admTok) carregarAdmin();
   };
 }
 
 // ------------------------------------------------ home
 const modoAdm = () => !!(admTok && estado?.atual && !minhaVez());
 const minhaVez = () => !!(eu && estado && !estado.pausado && estado.atual?.id === eu.id);
+
+// "4º BEC (Barreiras-BA)" para um id de OM
+const nomeOm = id => { const l = estado.locais.find(x => x.id === id); return l ? `${l.om} (${l.cidade})` : ''; };
 
 function render() {
   if (!estado) return;
@@ -345,7 +357,21 @@ function render() {
 
   // área pessoal
   const area = $('#minhaArea');
-  if (modoAdm()) area.innerHTML = `<div class="meu vez adm-vez"><div class="status"><b>Modo administrador: escolhendo por ${esc(estado.atual.nome)}</b>Toque em "Escolher" na OM desejada. Após confirmar, a vez passa para ${esc(estado.proximo?.nome || 'o próximo')} e você continua escolhendo pelo seguinte.${estado.pausado ? ' As escolhas estão pausadas para os militares, mas o administrador pode escolher.' : ''}</div><button class="btn" id="sairAdmHome">Sair do modo admin</button></div>`;
+  if (modoAdm()) {
+    // prévia pelas preferências: só existe nos dados do admin
+    const dadosAdm = admDados?.classificacao.find(c => c.id === estado.atual.id);
+    const pv = dadosAdm?.previa;
+    const porPref = pv?.localId ? `<button class="btn btn-cta escolher" data-local="${pv.localId}">Escolher pela preferência: ${esc(nomeOm(pv.localId))} (${pv.opcao}ª opção)</button>` : '';
+    // lista completa de preferências do militar da vez, com cada opção livre (clicável) ou cheia
+    const lista = (dadosAdm?.prefs || []).map((id, i) => {
+      const l = estado.locais.find(x => x.id === id); if (!l) return '';
+      return l.restantes > 0
+        ? `<button class="op escolher" data-local="${l.id}"><b>${i + 1}ª</b> ${esc(l.om)} <span>(${esc(l.cidade)}) · ${l.restantes} livre${l.restantes > 1 ? 's' : ''}</span></button>`
+        : `<span class="op cheia"><b>${i + 1}ª</b> ${esc(l.om)} <span>(${esc(l.cidade)}) · cheia</span></span>`;
+    }).join('');
+    area.innerHTML = `<div class="meu vez adm-vez"><div class="status"><b>Modo administrador: escolhendo por ${esc(estado.atual.nome)}</b>Toque em "Escolher" na OM desejada. Após confirmar, a vez passa para ${esc(estado.proximo?.nome || 'o próximo')} e você continua escolhendo pelo seguinte.${estado.pausado ? ' As escolhas estão pausadas para os militares, mas o administrador pode escolher.' : ''}${pv?.esgotadas ? ' As OMs da lista de preferências dele já foram preenchidas.' : ''}</div>${porPref}<button class="btn" id="sairAdmHome">Sair do modo admin</button>
+      ${lista ? `<div class="prefs-adm"><small>Preferências de ${esc(estado.atual.nome)} (planilha):</small>${lista}</div>` : ''}</div>`;
+  }
   else if (!eu) area.innerHTML = '';
   else {
     const me = estado.classificacao.find(c => c.id === eu.id);
@@ -415,7 +441,7 @@ function render() {
   $('#abaFila').textContent = meuPos ? `Classificação (${meuPos}º)` : 'Classificação';
 
   // classificação
-  const omDe = id => { const l = estado.locais.find(x => x.id === id); return l ? `${l.om} (${l.cidade})` : ''; };
+  const omDe = nomeOm;
   $('#fila').innerHTML = estado.classificacao.map(c => {
     const k = [c.localId ? 'ja' : '', estado.atual?.id === c.id ? 'atual' : '', estado.proximo?.id === c.id ? 'prox' : '', eu?.id === c.id ? 'voce' : ''].join(' ');
     const s = c.localId ? (c.fixo ? 'Vaga fixa: ' : '') + omDe(c.localId) : estado.atual?.id === c.id ? 'Escolhendo agora' : estado.proximo?.id === c.id ? 'Próximo' : 'Aguardando';
@@ -520,8 +546,13 @@ function mostrarHome() { setTimeout(render, 0); $('#home').hidden = false; $('#a
 function mostrarAdmin() { location.hash = 'admin'; $('#home').hidden = true; $('#admin').hidden = false; $('#linkHome').hidden = false; $('#linkAdm').hidden = true; carregarAdmin(); }
 
 async function carregarAdmin() {
-  try { admDados = await api('GET', '/api/admin/dados', null, admTok); renderAdmin(); }
-  catch (err) { if (err.status === 401) { admTok = null; sessionStorage.removeItem('adm'); mostrarHome(); abrirLogin('admin'); } }
+  try { admDados = await api('GET', '/api/admin/dados', null, admTok); renderAdmin(); if (modoAdm()) render(); }
+  catch (err) {
+    if (err.status !== 401) return;
+    const naTelaAdm = !$('#admin').hidden;
+    admTok = null; admDados = null; sessionStorage.removeItem('adm');
+    if (naTelaAdm) { mostrarHome(); abrirLogin('admin'); } else render(); // fora da tela de admin, sai sem incomodar
+  }
 }
 async function adm(metodo, rota, corpo) {
   try { const r = await api(metodo, rota, corpo, admTok); return r; }
@@ -545,6 +576,7 @@ function renderAdmin() {
         <button class="btn btn-perigo" data-a="reset" title="As vagas fixas são mantidas">Resetar todas as escolhas</button>
         <button class="btn" data-a="backup">Baixar backup</button>
         <button class="btn" data-a="imprimir">Imprimir quadro</button>
+        <a class="btn" href="/telao.html" target="_blank" rel="noopener" style="text-decoration:none">Abrir telão</a>
         <label class="btn" style="margin:0">Restaurar backup<input type="file" accept=".json" id="restaurar" hidden></label></div>
       <h2>Histórico de alocações</h2>
       <div class="rolagem"><table><thead><tr><th>#</th><th>Horário</th><th>Militar</th><th>OM</th><th>Tipo</th></tr></thead><tbody>
@@ -584,6 +616,29 @@ function renderAdmin() {
       </tbody></table></div>
       <div class="legenda">O militar com vaga fixa ocupa a vaga, é pulado na ordem de escolha e continua na vaga mesmo depois de "Resetar todas as escolhas". Ao soltar, ele volta para a fila na sua posição da classificação.</div></div>`;
   }
+  if (aba === 'prefs') {
+    const p = d.planilha;
+    const quando = t => t ? new Date(t).toLocaleString('pt-BR') : '—';
+    const pendentes = d.classificacao.filter(c => !c.localId);
+    const maxOp = Math.max(4, ...d.classificacao.map(c => c.prefs.length));
+    corpo = `<div class="painel">
+      <form class="form" id="fPlanilha"><label style="flex:1;min-width:240px">Link da planilha do Google (com a aba Notas aberta)
+        <input name="url" value="${esc(p?.url || '')}" placeholder="https://docs.google.com/spreadsheets/d/…/edit#gid=…"></label>
+        <button class="btn btn-pri">Salvar e sincronizar</button>
+        ${p?.url ? '<button type="button" class="btn" data-a="sincronizar">Sincronizar agora</button>' : ''}</form>
+      <div class="bloco"><div>${p?.url
+        ? `Última leitura: <b>${quando(p.ultimaSync)}</b> &nbsp; Militares com preferências: <b>${p.total ?? 0}</b><br>A planilha é lida de novo sozinha a cada 5 minutos.`
+          + (p.erro ? `<br><b style="color:var(--perigo)">Erro na última tentativa (${quando(p.tentativa)}): ${esc(p.erro)}</b>` : '')
+        : 'Nenhuma planilha configurada. A planilha precisa estar pública (qualquer pessoa com o link pode ver), com a coluna NOME e as colunas OM 01, OM 02… Cada OM no formato "OM - Cidade".'}</div></div>
+      ${p?.avisos?.length ? `<ul class="avisos">${p.avisos.map(a => `<li>${esc(a)}</li>`).join('')}</ul>` : ''}
+      <h2>Prévia (simulação pela ordem de classificação)</h2>
+      <div class="rolagem"><table class="prefs"><thead><tr><th>Posição</th><th>Militar</th><th>Prévia</th>${Array.from({ length: maxOp }, (_, i) => `<th>${i + 1}ª opção</th>`).join('')}</tr></thead><tbody>
+      ${pendentes.map(c => `<tr><td>${c.pos}º</td><td>${esc(c.nome)}</td>
+        <td>${c.previa?.localId ? `<b>${esc(omDe(c.previa.localId))}</b>` : c.previa?.esgotadas ? 'opções já preenchidas' : '<span style="color:var(--tinta2)">sem preferências</span>'}</td>
+        ${Array.from({ length: maxOp }, (_, i) => `<td class="${c.previa?.localId && c.prefs[i] === c.previa.localId ? 'ok' : ''}">${esc(c.prefs[i] ? omDe(c.prefs[i]) : '')}</td>`).join('')}</tr>`).join('') || `<tr><td colspan="${maxOp + 3}">Todos os militares já têm OM.</td></tr>`}
+      </tbody></table></div>
+      <div class="legenda">A prévia considera as escolhas já feitas e as vagas fixas. Militares sem preferências na planilha não ocupam vaga na simulação, então quem vem depois deles pode acabar com outra OM no dia.</div></div>`;
+  }
   if (aba === 'oms') {
     corpo = `<div class="painel">
       <form class="form" id="fLocal"><label>OM<input name="om" required placeholder="Ex.: 10º BEC"></label>
@@ -602,6 +657,7 @@ function renderAdmin() {
       <button class="${aba === 'militares' ? 'on' : ''}" data-aba="militares">Militares e senhas</button>
       <button class="${aba === 'fixas' ? 'on' : ''}" data-aba="fixas">Vagas fixas</button>
       <button class="${aba === 'oms' ? 'on' : ''}" data-aba="oms">OMs e vagas</button>
+      <button class="${aba === 'prefs' ? 'on' : ''}" data-aba="prefs">Preferências</button>
       <button data-aba="sair" style="margin-left:auto">Sair do admin</button></div>${corpo}`;
   cronometro();
 }
@@ -666,6 +722,7 @@ $('#admin').addEventListener('click', async e => {
   if (ds.senha) { const s = prompt('Nova senha (4 dígitos, nenhum dígito repetido mais de 2 vezes):'); if (s) await adm('PUT', '/api/admin/usuarios/' + ds.senha, { senha: s }); }
   if (ds.apagarU && confirm('Excluir este militar e sua escolha?')) await adm('DELETE', '/api/admin/usuarios/' + ds.apagarU);
   if (ds.a === 'imprimir') imprimir();
+  if (ds.a === 'sincronizar') { t.disabled = true; t.textContent = 'Sincronizando…'; try { await adm('POST', '/api/admin/planilha/sincronizar'); } finally { carregarAdmin(); } }
   const l = d.locais.find(x => x.id === (ds.vmais || ds.vmenos || ds.editarL));
   if (ds.vmais) await adm('PUT', '/api/admin/locais/' + l.id, { vagas: l.vagas + 1 });
   if (ds.vmenos && l.vagas > 0) await adm('PUT', '/api/admin/locais/' + l.id, { vagas: l.vagas - 1 });
@@ -696,6 +753,10 @@ $('#admin').addEventListener('submit', async e => {
     alert(`Militar cadastrado. Senha: ${r.senha}`);
   }
   if (e.target.id === 'fLocal') await adm('POST', '/api/admin/locais', f);
+  if (e.target.id === 'fPlanilha') {
+    const b = e.target.querySelector('.btn-pri'); b.disabled = true; b.textContent = 'Sincronizando…';
+    try { await adm('POST', '/api/admin/planilha', { url: f.url }); } finally { carregarAdmin(); }
+  }
   if (e.target.id === 'fFixo') {
     const c = admDados.classificacao.find(x => x.id === f.usuarioId);
     if (c?.localId && !confirm(`${c.nome} já escolheu uma OM. A escolha será substituída pela vaga fixa. Continuar?`)) return;

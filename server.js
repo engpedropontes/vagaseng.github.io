@@ -33,13 +33,15 @@ function seed() {
   for (const nome of JSON.parse(fs.readFileSync(path.join(__dirname, 'seed-militares.json'), 'utf8'))) {
     usuarios.push({ id: novoId(), nome, senha: gerarSenha(usuarios) });
   }
-  return { locais, usuarios, alocacoes: [], vinculos: [], pausado: true };
+  return { locais, usuarios, alocacoes: [], vinculos: [], pausado: true, preferencias: {}, planilha: null };
 }
 
 function carregar() {
   try {
     db = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
     db.vinculos = db.vinculos || []; // bancos antigos não tinham vagas fixas
+    db.preferencias = db.preferencias || {};
+    db.planilha = db.planilha || null;
     marcarVez();
   } catch {
     db = seed();
@@ -106,6 +108,22 @@ function marcarVez() {
   if (db.vez?.id !== atual.id) db.vez = { id: atual.id, desde: Date.now() };
 }
 
+// Prévia: seguindo a classificação, cada militar ainda sem OM fica com a primeira
+// opção da sua lista de preferências que ainda tiver vaga (considerando as anteriores).
+function simular() {
+  const resto = new Map(db.locais.map(l => [l.id, restantes(l)]));
+  const res = {};
+  for (const u of pendentes()) {
+    const prefs = (db.preferencias[u.id] || []).filter(id => resto.has(id));
+    if (!prefs.length) continue;
+    const i = prefs.findIndex(id => resto.get(id) > 0);
+    if (i < 0) { res[u.id] = { localId: null, esgotadas: true }; continue; }
+    resto.set(prefs[i], resto.get(prefs[i]) - 1);
+    res[u.id] = { localId: prefs[i], opcao: i + 1 };
+  }
+  return res;
+}
+
 function estadoPublico() {
   const fila = pendentes();
   const nome = id => db.usuarios.find(u => u.id === id)?.nome || '?';
@@ -159,6 +177,83 @@ function bloqueado(ip) {
 }
 function registrarFalha(ip) { tentativas.get(ip).push(Date.now()); }
 
+// ---------------------------------------------------------------- planilha de preferências
+// Planilha pública do Google: o servidor baixa a aba (CSV) e lê a coluna NOME e as colunas
+// "OM 01", "OM 02"... (ordem de preferência). Cada célula de OM é "OM - Cidade".
+// (º, ° e ⁰ viram "o" antes de normalizar: a planilha usa "1⁰ BEC" e o site "1º BEC")
+const normal = t => String(t || '').replace(/[º°⁰]/g, 'o').normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
+  .toLowerCase().replace(/\s+/g, ' ').trim();
+
+function urlCsv(link) {
+  const id = String(link || '').match(/\/spreadsheets\/d\/([\w-]+)/)?.[1];
+  if (!id) return null;
+  const gid = String(link).match(/[#&?]gid=(\d+)/)?.[1] || '0';
+  return `https://docs.google.com/spreadsheets/d/${id}/export?format=csv&gid=${gid}`;
+}
+
+function lerCsv(t) {
+  const linhas = []; let lin = [], cel = '', aspas = false;
+  for (let i = 0; i < t.length; i++) {
+    const c = t[i];
+    if (aspas) { if (c === '"') { if (t[i + 1] === '"') { cel += '"'; i++; } else aspas = false; } else cel += c; }
+    else if (c === '"') aspas = true;
+    else if (c === ',') { lin.push(cel); cel = ''; }
+    else if (c === '\n') { lin.push(cel); linhas.push(lin); lin = []; cel = ''; }
+    else if (c !== '\r') cel += c;
+  }
+  if (cel || lin.length) { lin.push(cel); linhas.push(lin); }
+  return linhas;
+}
+
+function acharOm(texto) {
+  const [om, ...resto] = String(texto).split(' - ');
+  const cands = db.locais.filter(l => normal(l.om) === normal(om));
+  if (cands.length <= 1) return cands[0] || null;
+  return cands.find(l => normal(l.cidade) === normal(resto.join(' - '))) || cands[0];
+}
+
+let sincronizando = false;
+async function sincronizarPlanilha() {
+  const url = urlCsv(db.planilha?.url);
+  if (!url || sincronizando) return;
+  sincronizando = true;
+  try {
+    const r = await fetch(url, { signal: AbortSignal.timeout(20000), redirect: 'follow' });
+    if (!r.ok) throw new Error(`A planilha respondeu ${r.status}. Confira se ela está pública (qualquer pessoa com o link pode ver).`);
+    const linhas = lerCsv(await r.text());
+    // A partir daqui é síncrono: nada muda no meio da atualização.
+    const ih = linhas.findIndex(l => l.some(c => normal(c) === 'nome'));
+    if (ih < 0) throw new Error('Não achei a coluna NOME. Confira se o link é da aba Notas.');
+    const cab = linhas[ih].map(normal);
+    const iNome = cab.indexOf('nome');
+    const iOms = cab.map((c, i) => [c.match(/^om\s*0*(\d+)$/)?.[1], i]).filter(([n]) => n).sort((a, b) => a[0] - b[0]).map(([, i]) => i);
+    if (!iOms.length) throw new Error('Não achei as colunas "OM 01", "OM 02"... na planilha.');
+    const prefs = {}, avisos = [];
+    for (const l of linhas.slice(ih + 1)) {
+      const nome = (l[iNome] || '').trim();
+      if (!nome) continue;
+      const u = db.usuarios.find(x => normal(x.nome) === normal(nome));
+      const opcoes = iOms.map(i => (l[i] || '').trim()).filter(Boolean);
+      if (!u) { if (opcoes.length) avisos.push(`Nome da planilha não encontrado no site: ${nome}`); continue; }
+      const ids = [];
+      for (const o of opcoes) {
+        const loc = acharOm(o);
+        if (!loc) avisos.push(`${u.nome}: OM não encontrada no site: "${o}"`);
+        else if (!ids.includes(loc.id)) ids.push(loc.id);
+      }
+      if (ids.length) prefs[u.id] = ids;
+    }
+    const mudouPrefs = JSON.stringify(prefs) !== JSON.stringify(db.preferencias);
+    db.preferencias = prefs;
+    db.planilha = { ...db.planilha, ultimaSync: Date.now(), erro: null, avisos, total: Object.keys(prefs).length };
+    if (mudouPrefs) mudou(); else { salvar(); }
+  } catch (e) {
+    db.planilha = { ...db.planilha, erro: e.name === 'TimeoutError' ? 'A planilha demorou demais para responder.' : e.message, tentativa: Date.now() };
+    salvar();
+  } finally { sincronizando = false; }
+}
+setInterval(sincronizarPlanilha, 5 * 60 * 1000);
+
 // ---------------------------------------------------------------- HTTP
 function json(res, status, obj) {
   res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
@@ -174,7 +269,7 @@ function lerCorpo(req) {
   });
 }
 
-const TIPOS = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon' };
+const TIPOS = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.json': 'application/json; charset=utf-8', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon' };
 function estatico(req, res) {
   const p = decodeURIComponent(new URL(req.url, 'http://x').pathname);
   const arq = path.normalize(path.join(PUBLIC_DIR, p === '/' ? 'index.html' : p));
@@ -253,7 +348,15 @@ async function rotear(req, res) {
   const partes = url.pathname.split('/'); // ['', 'api', 'admin', recurso, id]
   const recurso = partes[3], id = partes[4];
 
-  if (rota === 'GET /api/admin/dados') return json(res, 200, { ...estadoPublico(), usuarios: db.usuarios });
+  if (rota === 'GET /api/admin/dados') {
+    // preferências e prévia só vão para o admin (nunca no estado público)
+    const e = estadoPublico(), previa = simular();
+    e.classificacao.forEach(c => {
+      c.prefs = (db.preferencias[c.id] || []).filter(id => db.locais.some(l => l.id === id));
+      c.previa = c.localId ? null : previa[c.id] || null;
+    });
+    return json(res, 200, { ...e, usuarios: db.usuarios, planilha: db.planilha });
+  }
 
   if (rota === 'POST /api/admin/usuarios') {
     const nome = String(corpo.nome || '').trim().toUpperCase();
@@ -355,6 +458,22 @@ async function rotear(req, res) {
     return json(res, 200, { ok: true });
   }
 
+  if (rota === 'POST /api/admin/planilha') {
+    const link = String(corpo.url || '').trim();
+    if (link && !urlCsv(link)) return erro(res, 400, 'Link inválido. Copie o endereço da planilha do Google (com a aba Notas aberta).');
+    db.planilha = link ? { url: link } : null;
+    if (!link) { db.preferencias = {}; mudou(); return json(res, 200, { ok: true }); }
+    salvar();
+    await sincronizarPlanilha();
+    return json(res, 200, { ok: true, planilha: db.planilha });
+  }
+
+  if (rota === 'POST /api/admin/planilha/sincronizar') {
+    if (!db.planilha?.url) return erro(res, 400, 'Nenhuma planilha configurada.');
+    await sincronizarPlanilha();
+    return json(res, 200, { ok: true, planilha: db.planilha });
+  }
+
   if (rota === 'POST /api/admin/pausa') { db.pausado = !!corpo.pausado; mudou(); return json(res, 200, { ok: true }); }
 
   if (rota === 'POST /api/admin/desfazer') {
@@ -377,7 +496,8 @@ async function rotear(req, res) {
   if (rota === 'POST /api/admin/restaurar') {
     const d = corpo;
     if (!Array.isArray(d.locais) || !Array.isArray(d.usuarios) || !Array.isArray(d.alocacoes)) return erro(res, 400, 'Arquivo de backup inválido.');
-    db = { locais: d.locais, usuarios: d.usuarios, alocacoes: d.alocacoes, vinculos: Array.isArray(d.vinculos) ? d.vinculos : [], pausado: true };
+    db = { locais: d.locais, usuarios: d.usuarios, alocacoes: d.alocacoes, vinculos: Array.isArray(d.vinculos) ? d.vinculos : [], pausado: true,
+      preferencias: d.preferencias && typeof d.preferencias === 'object' ? d.preferencias : {}, planilha: d.planilha || null };
     mudou(); return json(res, 200, { ok: true });
   }
 
@@ -385,6 +505,7 @@ async function rotear(req, res) {
 }
 
 carregar();
+sincronizarPlanilha();
 http.createServer((req, res) => {
   rotear(req, res).catch(e => { console.error(e); if (!res.headersSent) erro(res, 400, e.message); });
 }).listen(PORT, () => console.log(`Escolha de OM rodando em http://localhost:${PORT}`));

@@ -35,6 +35,35 @@ sobreviva a reinícios. Opções simples:
 Evite planos com disco efêmero (ex.: Render gratuito): os dados somem ao reiniciar.
 Use o botão **Baixar backup** no admin periodicamente.
 
+## Telão
+
+Abra `/telao.html` (ou o botão **Abrir telão** em Administração > Andamento) numa
+TV ou projetor. Mostra o mapa do Brasil com as OMs e as vagas livres, quem está
+escolhendo, o próximo e as últimas escolhas; atualiza sozinho. Clique na tela
+para ficar em tela cheia.
+
+As OMs são localizadas automaticamente pelo nome da cidade, no formato
+**Cidade-UF** (ex.: `Manaus-AM`; também aceita `Manaus - AM` ou `Manaus/AM`),
+consultando a lista de municípios do IBGE em `public/municipios.json`. O mapa
+com a divisão dos estados vem da malha do IBGE (`public/brasil-uf.json`).
+Uma OM cuja cidade não for encontrada aparece listada no canto do mapa.
+
+## Preferências e prévia
+
+Em Administração > Preferências, cole o link da planilha pública do Google
+(com a aba de preferências aberta, para o link levar o `gid` dela). A aba precisa
+ter a coluna **NOME** e as colunas **OM 01**, **OM 02**… em ordem de prioridade,
+cada uma no formato `OM - Cidade` (ex.: `1º BEC - Caicó-RN`). O servidor lê a
+planilha ao salvar, ao clicar em "Sincronizar agora" e sozinho a cada 5 minutos,
+e avisa os nomes ou OMs que não encontrar no site.
+
+Com as preferências, o site calcula uma **prévia**: seguindo a classificação, cada
+militar ainda sem OM fica com a primeira opção que ainda tiver vaga. Tudo isso é
+**só para o administrador**: a prévia aparece na aba Preferências, e no modo
+administrador o botão "Escolher pela preferência" escolhe pelo militar da vez a
+primeira opção dele que ainda tiver vaga. As preferências e a prévia nunca vão nos
+dados públicos do site; os militares não veem nada disso.
+
 ## Regras implementadas
 
 - Só o primeiro militar sem OM (na ordem da classificação) consegue escolher;
