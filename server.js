@@ -291,7 +291,8 @@ function estatico(req, res) {
       res.writeHead(e2 ? 404 : 200, { 'Content-Type': TIPOS['.html'] });
       res.end(e2 ? '<h1>Arquivo index.html não encontrado</h1><p>Confira se a pasta <b>public</b> com o <b>index.html</b> foi enviada ao repositório.</p>' : idx);
     });
-    res.writeHead(200, { 'Content-Type': TIPOS[path.extname(arq)] || 'application/octet-stream' });
+    // no-cache: o navegador confere com o servidor antes de reusar, então uma versão nova aparece logo após o deploy
+    res.writeHead(200, { 'Content-Type': TIPOS[path.extname(arq)] || 'application/octet-stream', 'Cache-Control': 'no-cache' });
     res.end(buf);
   });
 }
