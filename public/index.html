@@ -114,11 +114,6 @@ table{border-collapse:collapse;width:100%}
 .fila li.atual .n,.fila li.atual .s{color:#fff}
 .fila li.prox{background:var(--ambar-claro);box-shadow:inset 4px 0 var(--ambar)}
 .fila li.voce .q::after{content:" (você)";font-weight:400}
-.fila .pv{display:block;color:#8CC0FF;font-size:12px}
-.fila .pv b{font-weight:600}
-.fila li.atual .pv{color:#fff}
-.previa-meu{margin-top:6px;color:var(--tinta2)}
-.previa-meu b{display:inline;font:600 inherit;color:var(--tinta)}
 .prefs td.ok{color:#8CC0FF}
 .avisos{margin:0;padding:10px 12px 10px 30px;color:var(--ambar);font-size:14px}
 
@@ -160,8 +155,6 @@ table{border-collapse:collapse;width:100%}
 #impressao .fila li{grid-template-columns:28px 1fr 1.3fr;align-items:baseline;background:#fff;color:#000;box-shadow:none;border-bottom:1px solid #ccc;padding:4px 0;break-inside:avoid}
 #impressao .fila .n,#impressao .fila .q,#impressao .fila .s{color:#000;white-space:nowrap;overflow:hidden}
 #impressao .fila .s{grid-column:auto}
-#impressao .fila .pv{display:inline;color:#000;font-size:inherit}
-#impressao .fila .s:has(.pv) .st,#impressao .fila .pv .cid{display:none}
 #impressao .fila li.voce .q::after{content:none}
 @media print{
   body.imprimir{background:#fff;color:#000;padding:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}
@@ -326,7 +319,7 @@ function conectar() {
     estado = JSON.parse(e.data);
     difRelogio = Date.now() - estado.agora;
     render();
-    if (admTok && !$('#admin').hidden) carregarAdmin();
+    if (admTok) carregarAdmin();
   };
 }
 
@@ -336,12 +329,6 @@ const minhaVez = () => !!(eu && estado && !estado.pausado && estado.atual?.id ==
 
 // "4º BEC (Barreiras-BA)" para um id de OM
 const nomeOm = id => { const l = estado.locais.find(x => x.id === id); return l ? `${l.om} (${l.cidade})` : ''; };
-// texto da prévia (planilha de preferências) de um militar da classificação
-function textoPrevia(c) {
-  if (!c?.previa) return '';
-  if (c.previa.esgotadas) return 'prévia: preferências da planilha já preenchidas';
-  return `prévia: ${nomeOm(c.previa.localId)} · ${c.previa.opcao}ª opção`;
-}
 
 function render() {
   if (!estado) return;
@@ -364,7 +351,8 @@ function render() {
   // área pessoal
   const area = $('#minhaArea');
   if (modoAdm()) {
-    const pv = estado.classificacao.find(c => c.id === estado.atual.id)?.previa;
+    // prévia pelas preferências: só existe nos dados do admin
+    const pv = admDados?.classificacao.find(c => c.id === estado.atual.id)?.previa;
     const porPref = pv?.localId ? `<button class="btn btn-cta escolher" data-local="${pv.localId}">Escolher pela preferência: ${esc(nomeOm(pv.localId))} (${pv.opcao}ª opção)</button>` : '';
     area.innerHTML = `<div class="meu vez adm-vez"><div class="status"><b>Modo administrador: escolhendo por ${esc(estado.atual.nome)}</b>Toque em "Escolher" na OM desejada. Após confirmar, a vez passa para ${esc(estado.proximo?.nome || 'o próximo')} e você continua escolhendo pelo seguinte.${estado.pausado ? ' As escolhas estão pausadas para os militares, mas o administrador pode escolher.' : ''}${pv?.esgotadas ? ' As OMs da lista de preferências dele já foram preenchidas.' : ''}</div>${porPref}<button class="btn" id="sairAdmHome">Sair do modo admin</button></div>`;
   }
@@ -389,10 +377,9 @@ function render() {
     } else {
       status = `<b>Aguardando sua vez</b>${aFrente} militar(es) à sua frente. A escolha abre sozinha quando chegar sua vez. Restam ${estado.totalRestante} vagas em ${abertas.length} OM.`;
     }
-    const pv = textoPrevia(me);
     area.innerHTML = `<div class="meu ${cls}"><div><div class="pos">${me.pos}º</div></div>
       <div><div class="nome">${esc(eu.nome)}</div><div style="color:var(--tinta2)">posição na classificação de ${estado.classificacao.length}</div></div>
-      <div class="status">${status}${pv ? `<div class="previa-meu">Pela sua lista de preferências (planilha), você ficaria em: <b>${esc(pv.replace(/^prévia: /, ''))}</b></div>` : ''}</div></div>`;
+      <div class="status">${status}</div></div>`;
   }
 
   // aviso de chegada da vez
@@ -442,11 +429,7 @@ function render() {
   $('#fila').innerHTML = estado.classificacao.map(c => {
     const k = [c.localId ? 'ja' : '', estado.atual?.id === c.id ? 'atual' : '', estado.proximo?.id === c.id ? 'prox' : '', eu?.id === c.id ? 'voce' : ''].join(' ');
     const s = c.localId ? (c.fixo ? 'Vaga fixa: ' : '') + omDe(c.localId) : estado.atual?.id === c.id ? 'Escolhendo agora' : estado.proximo?.id === c.id ? 'Próximo' : 'Aguardando';
-    // prévia: na tela vem abaixo do status; na impressão substitui o status e omite a cidade
-    const l = c.previa?.localId && estado.locais.find(x => x.id === c.previa.localId);
-    const pv = l ? `<span class="pv">prévia: <b>${esc(l.om)}</b><span class="cid"> (${esc(l.cidade)})</span> · ${c.previa.opcao}ª opção</span>`
-      : c.previa?.esgotadas ? `<span class="pv">${esc(textoPrevia(c))}</span>` : '';
-    return `<li class="${k}"><span class="n">${c.pos}º</span><span class="q">${esc(c.nome)}</span><span class="s"><span class="st">${esc(s)}</span>${pv}</span></li>`;
+    return `<li class="${k}"><span class="n">${c.pos}º</span><span class="q">${esc(c.nome)}</span><span class="s">${esc(s)}</span></li>`;
   }).join('') || '<li><span></span><span class="s">Nenhum militar cadastrado.</span></li>';
   cronometro();
 }
@@ -547,8 +530,13 @@ function mostrarHome() { setTimeout(render, 0); $('#home').hidden = false; $('#a
 function mostrarAdmin() { location.hash = 'admin'; $('#home').hidden = true; $('#admin').hidden = false; $('#linkHome').hidden = false; $('#linkAdm').hidden = true; carregarAdmin(); }
 
 async function carregarAdmin() {
-  try { admDados = await api('GET', '/api/admin/dados', null, admTok); renderAdmin(); }
-  catch (err) { if (err.status === 401) { admTok = null; sessionStorage.removeItem('adm'); mostrarHome(); abrirLogin('admin'); } }
+  try { admDados = await api('GET', '/api/admin/dados', null, admTok); renderAdmin(); if (modoAdm()) render(); }
+  catch (err) {
+    if (err.status !== 401) return;
+    const naTelaAdm = !$('#admin').hidden;
+    admTok = null; admDados = null; sessionStorage.removeItem('adm');
+    if (naTelaAdm) { mostrarHome(); abrirLogin('admin'); } else render(); // fora da tela de admin, sai sem incomodar
+  }
 }
 async function adm(metodo, rota, corpo) {
   try { const r = await api(metodo, rota, corpo, admTok); return r; }

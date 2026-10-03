@@ -58,10 +58,11 @@ planilha ao salvar, ao clicar em "Sincronizar agora" e sozinho a cada 5 minutos,
 e avisa os nomes ou OMs que não encontrar no site.
 
 Com as preferências, o site calcula uma **prévia**: seguindo a classificação, cada
-militar ainda sem OM fica com a primeira opção que ainda tiver vaga. A prévia
-aparece na classificação, no cartão de cada militar, na impressão do quadro e na
-aba Preferências. No modo administrador, o botão "Escolher pela preferência"
-escolhe pelo militar da vez a primeira opção dele que ainda tiver vaga.
+militar ainda sem OM fica com a primeira opção que ainda tiver vaga. Tudo isso é
+**só para o administrador**: a prévia aparece na aba Preferências, e no modo
+administrador o botão "Escolher pela preferência" escolhe pelo militar da vez a
+primeira opção dele que ainda tiver vaga. As preferências e a prévia nunca vão nos
+dados públicos do site; os militares não veem nada disso.
 
 ## Regras implementadas
 

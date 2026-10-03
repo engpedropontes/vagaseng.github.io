@@ -125,7 +125,6 @@ function simular() {
 }
 
 function estadoPublico() {
-  const previa = simular();
   const fila = pendentes();
   const nome = id => db.usuarios.find(u => u.id === id)?.nome || '?';
   return {
@@ -139,8 +138,7 @@ function estadoPublico() {
     })),
     classificacao: db.usuarios.map((u, i) => {
       const a = alocacaoDe(u.id);
-      return { id: u.id, pos: i + 1, nome: u.nome, localId: a ? a.localId : null, fixo: !!vinculoDe(u.id),
-        prefs: (db.preferencias[u.id] || []).filter(id => db.locais.some(l => l.id === id)), previa: a ? null : previa[u.id] || null };
+      return { id: u.id, pos: i + 1, nome: u.nome, localId: a ? a.localId : null, fixo: !!vinculoDe(u.id) };
     }),
     atual: fila[0] ? { id: fila[0].id, nome: fila[0].nome } : null,
     proximo: fila[1] ? { id: fila[1].id, nome: fila[1].nome } : null,
@@ -350,7 +348,15 @@ async function rotear(req, res) {
   const partes = url.pathname.split('/'); // ['', 'api', 'admin', recurso, id]
   const recurso = partes[3], id = partes[4];
 
-  if (rota === 'GET /api/admin/dados') return json(res, 200, { ...estadoPublico(), usuarios: db.usuarios, planilha: db.planilha });
+  if (rota === 'GET /api/admin/dados') {
+    // preferências e prévia só vão para o admin (nunca no estado público)
+    const e = estadoPublico(), previa = simular();
+    e.classificacao.forEach(c => {
+      c.prefs = (db.preferencias[c.id] || []).filter(id => db.locais.some(l => l.id === id));
+      c.previa = c.localId ? null : previa[c.id] || null;
+    });
+    return json(res, 200, { ...e, usuarios: db.usuarios, planilha: db.planilha });
+  }
 
   if (rota === 'POST /api/admin/usuarios') {
     const nome = String(corpo.nome || '').trim().toUpperCase();
