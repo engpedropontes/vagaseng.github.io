@@ -124,6 +124,18 @@ function simular() {
   return res;
 }
 
+// Acrescenta à classificação as preferências e a prévia de cada militar.
+// Vai para a página pública "Preferências" (só leitura) e para o admin; fica fora
+// do estado transmitido em tempo real para não pesar em todas as telas.
+function comPreferencias(e) {
+  const previa = simular();
+  e.classificacao.forEach(c => {
+    c.prefs = (db.preferencias[c.id] || []).filter(id => db.locais.some(l => l.id === id));
+    c.previa = c.localId ? null : previa[c.id] || null;
+  });
+  return e;
+}
+
 function estadoPublico() {
   const fila = pendentes();
   const nome = id => db.usuarios.find(u => u.id === id)?.nome || '?';
@@ -298,6 +310,12 @@ async function rotear(req, res) {
   // ---- público
   if (rota === 'GET /api/estado') return json(res, 200, estadoPublico());
 
+  // página "Preferências": prévia pela planilha, só leitura (link e sincronização ficam com o admin)
+  if (rota === 'GET /api/preferencias') {
+    const { locais, classificacao } = comPreferencias(estadoPublico());
+    return json(res, 200, { locais, classificacao, ultimaSync: db.planilha?.ultimaSync || null, configurada: !!db.planilha?.url });
+  }
+
   if (rota === 'GET /api/eventos') {
     res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
     res.write(`data: ${JSON.stringify(estadoPublico())}\n\n`);
@@ -348,15 +366,7 @@ async function rotear(req, res) {
   const partes = url.pathname.split('/'); // ['', 'api', 'admin', recurso, id]
   const recurso = partes[3], id = partes[4];
 
-  if (rota === 'GET /api/admin/dados') {
-    // preferências e prévia só vão para o admin (nunca no estado público)
-    const e = estadoPublico(), previa = simular();
-    e.classificacao.forEach(c => {
-      c.prefs = (db.preferencias[c.id] || []).filter(id => db.locais.some(l => l.id === id));
-      c.previa = c.localId ? null : previa[c.id] || null;
-    });
-    return json(res, 200, { ...e, usuarios: db.usuarios, planilha: db.planilha });
-  }
+  if (rota === 'GET /api/admin/dados') return json(res, 200, { ...comPreferencias(estadoPublico()), usuarios: db.usuarios, planilha: db.planilha });
 
   if (rota === 'POST /api/admin/usuarios') {
     const nome = String(corpo.nome || '').trim().toUpperCase();

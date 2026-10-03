@@ -33,7 +33,7 @@ h1{font:700 clamp(30px,5vw,46px)/1 var(--cond);margin:0;letter-spacing:.01em}
 .progresso{font:600 18px/1.2 var(--cond);color:var(--tinta2);text-align:right}
 .barra{height:6px;background:var(--grade);margin-top:6px;width:220px;max-width:60vw}
 .barra i{display:block;height:100%;background:var(--oliva);transition:width .4s}
-.linkadm{color:var(--tinta2);font-size:13px;background:none;border:0;text-decoration:underline;padding:0;margin-left:10px}
+.linkadm{color:var(--tinta2);font-size:13px;background:none;border:0;text-decoration:underline;padding:0;margin:0 12px 0 10px}
 
 /* faixa de vez (elemento central) */
 .faixa{display:grid;grid-template-columns:1.4fr 1fr auto;border:2px solid var(--borda);background:var(--papel);margin-bottom:18px}
@@ -93,6 +93,8 @@ table{border-collapse:collapse;width:100%}
 .slot.ocup.fixo.eu{background:var(--ambar);outline-color:#0A1628}
 .btn-adm{background:#17B3C9;color:#0A1628;border:2px solid #17B3C9;font:700 17px/1 var(--cond);letter-spacing:.06em;padding:8px 18px}
 .btn-adm:hover{background:#3FCBDD;border-color:#3FCBDD}
+.btn-prefs{background:transparent;color:#17B3C9;margin-right:8px}
+.btn-prefs:hover{color:#0A1628}
 .fixos-form select{border:2px solid var(--borda);padding:7px 8px;background:var(--escuro);color:var(--tinta);min-height:40px;max-width:100%}
 .legenda{font-size:13px;color:var(--tinta2);padding:8px 12px;border-top:1px solid var(--grade)}
 .slot.livre{background:var(--vazio)}
@@ -250,7 +252,7 @@ table{border-collapse:collapse;width:100%}
     <div class="progresso">
       <span id="contagem">Carregando…</span>
       <div class="barra"><i id="barra" style="width:0"></i></div>
-      <div style="margin-top:6px"><button class="linkadm" id="linkHome" hidden>Voltar ao quadro</button><button class="btn btn-adm" id="linkAdm">ADM</button></div>
+      <div style="margin-top:6px"><button class="linkadm" id="linkHome" hidden>Voltar ao quadro</button><button class="btn btn-adm btn-prefs" id="linkPrefs">PREFERÊNCIAS</button><button class="btn btn-adm" id="linkAdm">ADM</button></div>
     </div>
   </header>
 
@@ -275,6 +277,7 @@ table{border-collapse:collapse;width:100%}
   </main>
 
   <main id="admin" class="adm" hidden></main>
+  <main id="prefs" class="adm" hidden></main>
 </div>
 
 <!-- login do militar / admin -->
@@ -329,6 +332,7 @@ function conectar() {
     difRelogio = Date.now() - estado.agora;
     render();
     if (admTok) carregarAdmin();
+    if (!$('#prefs').hidden) carregarPrefs();
   };
 }
 
@@ -544,8 +548,17 @@ $('#soVaga').addEventListener('change', e => { soVaga = e.target.checked; render
 // ------------------------------------------------ administração
 $('#linkAdm').addEventListener('click', () => admTok ? mostrarAdmin() : abrirLogin('admin'));
 $('#linkHome').addEventListener('click', () => { location.hash = ''; mostrarHome(); });
-function mostrarHome() { setTimeout(render, 0); $('#home').hidden = false; $('#admin').hidden = true; $('#linkHome').hidden = true; $('#linkAdm').hidden = false; }
-function mostrarAdmin() { location.hash = 'admin'; $('#home').hidden = true; $('#admin').hidden = false; $('#linkHome').hidden = false; $('#linkAdm').hidden = true; carregarAdmin(); }
+$('#linkPrefs').addEventListener('click', () => mostrarPrefs());
+// telas: quadro (home), administração e preferências
+function tela(qual) {
+  for (const t of ['home', 'admin', 'prefs']) $('#' + t).hidden = t !== qual;
+  $('#linkHome').hidden = qual === 'home';
+  $('#linkAdm').hidden = qual === 'admin';
+  $('#linkPrefs').hidden = qual === 'prefs';
+}
+function mostrarHome() { setTimeout(render, 0); tela('home'); }
+function mostrarAdmin() { location.hash = 'admin'; tela('admin'); carregarAdmin(); }
+function mostrarPrefs() { location.hash = 'preferencias'; tela('prefs'); carregarPrefs(); }
 
 async function carregarAdmin() {
   try { admDados = await api('GET', '/api/admin/dados', null, admTok); renderAdmin(); if (modoAdm()) render(); }
@@ -622,8 +635,6 @@ function renderAdmin() {
   if (aba === 'prefs') {
     const p = d.planilha;
     const quando = t => t ? new Date(t).toLocaleString('pt-BR') : '—';
-    const pendentes = d.classificacao.filter(c => !c.localId);
-    const maxOp = Math.max(4, ...d.classificacao.map(c => c.prefs.length));
     corpo = `<div class="painel">
       <form class="form" id="fPlanilha"><label style="flex:1;min-width:240px">Link da planilha do Google (com a aba Notas aberta)
         <input name="url" value="${esc(p?.url || '')}" placeholder="https://docs.google.com/spreadsheets/d/…/edit#gid=…"></label>
@@ -634,13 +645,7 @@ function renderAdmin() {
           + (p.erro ? `<br><b style="color:var(--perigo)">Erro na última tentativa (${quando(p.tentativa)}): ${esc(p.erro)}</b>` : '')
         : 'Nenhuma planilha configurada. A planilha precisa estar pública (qualquer pessoa com o link pode ver), com a coluna NOME e as colunas OM 01, OM 02… Cada OM no formato "OM - Cidade".'}</div></div>
       ${p?.avisos?.length ? `<ul class="avisos">${p.avisos.map(a => `<li>${esc(a)}</li>`).join('')}</ul>` : ''}
-      <h2>Prévia (simulação pela ordem de classificação)</h2>
-      <div class="rolagem"><table class="prefs"><thead><tr><th>Posição</th><th>Militar</th><th>Prévia</th>${Array.from({ length: maxOp }, (_, i) => `<th>${i + 1}ª opção</th>`).join('')}</tr></thead><tbody>
-      ${pendentes.map(c => `<tr><td>${c.pos}º</td><td>${esc(c.nome)}</td>
-        <td>${c.previa?.localId ? `<b>${esc(omDe(c.previa.localId))}</b>` : c.previa?.esgotadas ? 'opções já preenchidas' : '<span style="color:var(--tinta2)">sem preferências</span>'}</td>
-        ${Array.from({ length: maxOp }, (_, i) => `<td class="${c.previa?.localId && c.prefs[i] === c.previa.localId ? 'ok' : ''}">${esc(c.prefs[i] ? omDe(c.prefs[i]) : '')}</td>`).join('')}</tr>`).join('') || `<tr><td colspan="${maxOp + 3}">Todos os militares já têm OM.</td></tr>`}
-      </tbody></table></div>
-      <div class="legenda">A prévia considera as escolhas já feitas e as vagas fixas. Militares sem preferências na planilha não ocupam vaga na simulação, então quem vem depois deles pode acabar com outra OM no dia.</div></div>`;
+      ${tabelaPrevia(d)}</div>`;
   }
   if (aba === 'oms') {
     corpo = `<div class="painel">
@@ -696,6 +701,32 @@ function imprimir() {
   window.print();
 }
 window.addEventListener('afterprint', () => document.body.classList.remove('imprimir'));
+
+// Tabela da prévia pelas preferências (usada na página pública e na aba do admin)
+function tabelaPrevia(d) {
+  const omDe = id => { const l = d.locais.find(x => x.id === id); return l ? `${l.om} (${l.cidade})` : ''; };
+  const pendentes = d.classificacao.filter(c => !c.localId);
+  const maxOp = Math.max(4, ...d.classificacao.map(c => c.prefs.length));
+  return `<h2>Prévia (simulação pela ordem de classificação)</h2>
+    <div class="rolagem"><table class="prefs"><thead><tr><th>Posição</th><th>Militar</th><th>Prévia</th>${Array.from({ length: maxOp }, (_, i) => `<th>${i + 1}ª opção</th>`).join('')}</tr></thead><tbody>
+    ${pendentes.map(c => `<tr><td>${c.pos}º</td><td>${esc(c.nome)}</td>
+      <td>${c.previa?.localId ? `<b>${esc(omDe(c.previa.localId))}</b>` : c.previa?.esgotadas ? 'opções já preenchidas' : '<span style="color:var(--tinta2)">sem preferências</span>'}</td>
+      ${Array.from({ length: maxOp }, (_, i) => `<td class="${c.previa?.localId && c.prefs[i] === c.previa.localId ? 'ok' : ''}">${esc(c.prefs[i] ? omDe(c.prefs[i]) : '')}</td>`).join('')}</tr>`).join('') || `<tr><td colspan="${maxOp + 3}">Todos os militares já têm OM.</td></tr>`}
+    </tbody></table></div>
+    <div class="legenda">A prévia considera as escolhas já feitas e as vagas fixas. Militares sem preferências na planilha não ocupam vaga na simulação, então quem vem depois deles pode acabar com outra OM no dia.</div>`;
+}
+
+// ------------------------------------------------ página Preferências (só leitura, para todos)
+async function carregarPrefs() {
+  try {
+    const d = await api('GET', '/api/preferencias');
+    $('#prefs').innerHTML = `<div class="painel">
+      <div class="bloco"><div>${d.configurada
+        ? `Preferências lidas da planilha da turma. Última atualização: <b>${d.ultimaSync ? new Date(d.ultimaSync).toLocaleString('pt-BR') : '—'}</b>. A prévia muda a cada escolha feita.`
+        : 'A administração ainda não ligou a planilha de preferências.'}</div></div>
+      ${tabelaPrevia(d)}</div>`;
+  } catch (err) { $('#prefs').innerHTML = `<div class="painel"><div class="bloco">${esc(err.message)}</div></div>`; }
+}
 
 function moverPara(id, novaPos) {
   const ids = admDados.usuarios.map(u => u.id).filter(x => x !== id);
@@ -777,9 +808,11 @@ $('#admin').addEventListener('submit', async e => {
   if (token) { try { eu = await api('GET', '/api/eu', null, token); } catch { sair(); } }
   conectar();
   if (location.hash === '#admin') admTok ? mostrarAdmin() : abrirLogin('admin');
+  if (location.hash === '#preferencias') mostrarPrefs();
 })();
 window.addEventListener('hashchange', () => {
-  if (location.hash === '#admin') admTok ? mostrarAdmin() : abrirLogin('admin'); else mostrarHome();
+  if (location.hash === '#admin') admTok ? mostrarAdmin() : abrirLogin('admin');
+  else if (location.hash === '#preferencias') mostrarPrefs(); else mostrarHome();
 });
 </script>
 </body>
