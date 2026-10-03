@@ -155,13 +155,16 @@ table{border-collapse:collapse;width:100%}
 .folha h1{font-size:24px;margin:2px 0 0}
 .folha .imp-data{margin:4px 0 0;color:#333}
 .folha h2{font:700 20px/1 var(--cond);margin:14px 0 6px}
-.marca-dagua{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:2}
-.marca-dagua span{transform:rotate(-54.7deg);font:700 120px/1 var(--cond);letter-spacing:.08em;color:rgba(0,0,0,.09);white-space:nowrap}
+/* marca d'água: desenho SVG atrás do conteúdo (as células são transparentes),
+   o jeito que todos os navegadores imprimem igual */
+.marca-dagua{position:absolute;inset:0;z-index:0;pointer-events:none}
+.marca-dagua svg{display:block;width:100%;height:100%}
+.folha .conteudo{position:relative;z-index:1}
 #impressao .quadro{display:table!important;table-layout:fixed;width:100%}
-#impressao .quadro th,#impressao .quadro td{border:1px solid #999;color:#000!important;background:#fff;padding:3px 5px;white-space:nowrap;overflow:hidden;text-overflow:clip;min-width:0}
-#impressao .quadro th{background:#e8e8e8}
-#impressao .quadro .slot.ocup{background:#fff;outline:0;font-weight:700}
-#impressao .quadro .slot.fech{background:#d6d6d6}
+#impressao .quadro th,#impressao .quadro td{border:1px solid #999;color:#000!important;background:transparent;padding:3px 5px;white-space:nowrap;overflow:hidden;text-overflow:clip;min-width:0}
+#impressao .quadro th{background:rgba(0,0,0,.08)}
+#impressao .quadro .slot.ocup{background:transparent;outline:0;font-weight:700}
+#impressao .quadro .slot.fech{background:rgba(0,0,0,.16)}
 #impressao .classif td{text-align:left;padding:2px 6px}
 #impressao .classif td:first-child{text-align:center}
 @media print{
@@ -686,8 +689,12 @@ function imprimir() {
   tabela.querySelectorAll('.acao').forEach(c => c.remove());
   // larguras fixas: OM, cidade e livres; o resto é dividido entre as colunas de militares
   const nMil = tabela.querySelectorAll('thead th').length - 3;
-  tabela.insertAdjacentHTML('afterbegin', `<colgroup><col style="width:19%"><col style="width:23%"><col style="width:8%">${'<col>'.repeat(nMil)}</colgroup>`);
-  const marca = `<div class="marca-dagua" aria-hidden="true"><span>SIMULAÇÃO</span></div>`;
+  tabela.insertAdjacentHTML('afterbegin', `<colgroup><col style="width:17%"><col style="width:20%"><col style="width:7%">${'<col>'.repeat(nMil)}</colgroup>`);
+  // proporção da folha (186 x 236 mm); o texto fica na diagonal da A4
+  const marca = `<div class="marca-dagua" aria-hidden="true"><svg viewBox="0 0 1000 1269" preserveAspectRatio="xMidYMid meet">
+    <text x="500" y="634" transform="rotate(-54.7 500 634)" text-anchor="middle" dominant-baseline="central"
+      font-family="Barlow Condensed, Arial Narrow, Arial, sans-serif" font-weight="700" font-size="190" letter-spacing="12"
+      fill="#000" fill-opacity=".1">SIMULAÇÃO</text></svg></div>`;
   const topo = `<p class="previa">PRÉVIA</p><h1>Escolha de OM - Eng EsAO</h1>`;
   $('#impressao').innerHTML = `
     <section class="folha">${marca}<div class="conteudo">${topo}
@@ -698,6 +705,10 @@ function imprimir() {
   // reduz o conteúdo de cada folha até caber nela (mede fora da tela, na largura da página)
   const imp = $('#impressao');
   imp.classList.add('medindo');
+  imp.querySelectorAll('.quadro td, .classif td').forEach(td => {
+    let t = parseFloat(getComputedStyle(td).fontSize);
+    while (td.scrollWidth > td.clientWidth && t > 6) td.style.fontSize = (t -= 0.5) + 'px';
+  });
   imp.querySelectorAll('.folha').forEach(f => {
     const c = f.querySelector('.conteudo');
     const esc = Math.min(1, f.clientHeight * 0.97 / c.scrollHeight);
