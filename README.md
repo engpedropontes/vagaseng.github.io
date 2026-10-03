@@ -75,3 +75,9 @@ primeira opção dele que ainda tiver vaga.
 - Senhas dos militares: 4 dígitos, nenhum dígito repetido mais de 2 vezes
   (ex.: 1123 vale, 1112 não). Vale para as geradas e para as digitadas no admin.
 - Tentativas de senha limitadas a 8 por minuto por IP.
+
+## Créditos
+
+Distintivo da Arma de Engenharia (`public/engenharia.svg`): Diego Biavati, via
+[Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Distintivo_da_Arma_de_Engenharia_-_Ex%C3%A9rcito_Brasileiro.svg),
+licença [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/deed.pt-br). Recortado e sem os metadados do editor.
