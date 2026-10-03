@@ -42,8 +42,11 @@ TV ou projetor. Mostra o mapa do Brasil com as OMs e as vagas livres, quem está
 escolhendo, o próximo e as últimas escolhas; atualiza sozinho. Clique na tela
 para ficar em tela cheia.
 
-As coordenadas das cidades ficam na tabela `CIDADES` de `public/telao.html`.
-Uma OM cadastrada numa cidade que não está lá aparece listada no canto do mapa.
+As OMs são localizadas automaticamente pelo nome da cidade, no formato
+**Cidade-UF** (ex.: `Manaus-AM`; também aceita `Manaus - AM` ou `Manaus/AM`),
+consultando a lista de municípios do IBGE em `public/municipios.json`. O mapa
+com a divisão dos estados vem da malha do IBGE (`public/brasil-uf.json`).
+Uma OM cuja cidade não for encontrada aparece listada no canto do mapa.
 
 ## Regras implementadas
 

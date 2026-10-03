@@ -8,7 +8,6 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
 /* Telão: página para TV/projetor. Sem botões; atualiza sozinha.
    Clique em qualquer lugar para tela cheia. */
@@ -36,9 +35,10 @@ body.sem-cursor{cursor:none}
 
 /* mapa */
 .mapa-box{position:relative;border:2px solid var(--borda);background:#0B1A2E;min-height:0;overflow:hidden}
-#mapa{position:absolute;inset:0;background:#222327} /* mesma cor do mar no mapa da Esri */
-#mapa .leaflet-control-attribution{background:rgba(10,22,40,.7);color:var(--tinta2);font-size:10px}
-#mapa .leaflet-control-attribution a{color:var(--tinta2)}
+#mapa{position:absolute;inset:0;width:100%;height:100%}
+#mapa .uf{fill:#13294A;stroke:#4F75A8;stroke-width:1.2;stroke-linejoin:round}
+#mapa .sigla{fill:#6F8DB5;opacity:.55;font:700 15px var(--cond);text-anchor:middle;dominant-baseline:central;letter-spacing:.05em}
+.fonte{position:absolute;right:8px;bottom:4px;z-index:600;font:400 10px var(--corpo);color:#5D7394}
 #sobre{position:absolute;inset:0;pointer-events:none;z-index:500}
 #sobre svg{position:absolute;inset:0;width:100%;height:100%}
 .pino{position:absolute;transform:translate(-50%,-50%);border-radius:50%;display:flex;align-items:center;justify-content:center;
@@ -101,11 +101,12 @@ body.sem-cursor{cursor:none}
   </header>
   <div class="corpo">
     <div class="mapa-box">
-      <div id="mapa"></div>
+      <svg id="mapa" aria-hidden="true"></svg>
       <div id="sobre"><svg id="linhas"></svg></div>
       <div class="anuncio" id="anuncio"></div>
       <div class="legenda-mapa"><i style="background:var(--livre)"></i>com vaga (número = vagas livres) &nbsp; <i style="background:var(--cheio)"></i>completa</div>
       <div class="sem-local" id="semLocal"></div>
+      <div class="fonte">Malha: IBGE · Municípios: IBGE (lista kelvins/municipios-brasileiros)</div>
     </div>
     <aside class="lado">
       <div class="cartao agora"><small>ESCOLHENDO AGORA</small><div class="nome" id="agoraNome">—</div>
@@ -118,54 +119,67 @@ body.sem-cursor{cursor:none}
 </div>
 <div id="conexao" hidden>Reconectando ao servidor…</div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script>
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
-// Coordenadas das cidades (lat, lon). Cidade nova cadastrada no admin precisa entrar aqui
-// para aparecer no mapa; enquanto isso ela é listada no canto do mapa.
-const CIDADES = {
-  'caico-rn': [-6.4597, -37.0978], 'teresina-pi': [-5.0892, -42.8016], 'picos-pi': [-7.0769, -41.4669],
-  'barreiras-ba': [-12.1528, -44.99], 'porto velho-ro': [-8.7612, -63.9004], 'boa vista-rr': [2.8235, -60.6758],
-  'rio branco-ac': [-9.9747, -67.81], 'santarem-pa': [-2.4385, -54.6996], 'cuiaba-mt': [-15.6014, -56.0979],
-  'lages-sc': [-27.8157, -50.3264], 'araguari-mg': [-18.6456, -48.1934], 'rio de janeiro-rj': [-22.9068, -43.1729],
-  'pindamonhangaba-sp': [-22.9246, -45.4613], 'cachoeira do sul-rs': [-30.0392, -52.8939], 'itajuba-mg': [-22.4256, -45.4528],
-  'porto uniao-sc': [-26.2378, -51.0783], 'sao gabriel-rs': [-30.3364, -54.32], 'natal-rn': [-5.7945, -35.211],
-  'aquidauana-ms': [-20.4711, -55.7872], 'alegrete-rs': [-29.7831, -55.7919], 'sao borja-rs': [-28.6608, -56.0044],
-  'dom pedrito-rs': [-30.9828, -54.6731], 'jardim-ms': [-21.4803, -56.1381], 'maraba-pa': [-5.3686, -49.1178],
-  'sao leopoldo-rs': [-29.7604, -51.1478], 'sao bento do una-pe': [-8.5233, -36.4444], 'tubarao-sc': [-28.4667, -49.0069],
-  'palmas-pr': [-26.4842, -51.9906], 'sao gabriel da cachoeira-am': [-0.1303, -67.0892], 'ipameri-go': [-17.7217, -48.1594],
-  'tres coracoes-mg': [-21.6947, -45.2553], 'resende-rj': [-22.4689, -44.4469], 'taubate-sp': [-23.0264, -45.5558],
-  'brasilia-df': [-15.7939, -47.8828], 'manaus-am': [-3.119, -60.0217], 'belem-pa': [-1.4558, -48.4902],
-};
-const chave = c => String(c || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s*-\s*/g, '-').replace(/\s+/g, ' ').trim();
+// Localização automática: a cidade é procurada pelo nome na lista de municípios do IBGE
+// (municipios.json), no formato "Cidade-UF" (também aceita "Cidade/UF" ou "Cidade - UF").
+const norm = t => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+  .replace(/['’`]/g, '').replace(/[-\s]+/g, ' ').trim();
+let municipios = null, porNome = null;
+function localizar(cidade) {
+  if (!municipios) return null;
+  const m = String(cidade || '').trim().match(/^(.*?)\s*[-/,\s]\s*([A-Za-z]{2})$/);
+  if (m) { const r = municipios.get(norm(m[1]) + '|' + m[2].toUpperCase()); if (r) return r; }
+  const so = porNome.get(norm(m ? m[1] : cidade)); // sem UF (ou UF errada): só se o nome for único no país
+  return so && so.length === 1 ? so[0] : null;
+}
+const chave = c => { const r = localizar(c); return r ? r.join(',') : null; };
 
-let estado = null, difRelogio = 0, mapa = null, ultimoHist = null, novaCidade = null, timerNovo = null;
+let estado = null, difRelogio = 0, ultimoHist = null, novaCidade = null, timerNovo = null;
 
 // ------------------------------------------------ mapa
-// Leaflet só desenha o fundo (mapa estático, sem arrastar/zoom). Pinos e rótulos são
-// desenhados por cima, para os rótulos poderem se afastar uns dos outros sem sobrepor.
-const LIMITES = [[3.5, -69], [-32, -34.5]];
-function criarMapa() {
-  if (!window.L) return;
-  mapa = L.map('mapa', { zoomControl: false, dragging: false, scrollWheelZoom: false, doubleClickZoom: false, boxZoom: false,
-    keyboard: false, touchZoom: false, zoomSnap: 0.1, attributionControl: true });
-  // fundo cinza-escuro da Esri: gratuito, sem chave de acesso
-  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
-    attribution: 'Esri, HERE, Garmin, © OpenStreetMap', maxZoom: 16 }).addTo(mapa);
-  mapa.fitBounds(LIMITES, { padding: [10, 10] });
+// Mapa desenhado aqui mesmo (SVG), com a malha dos estados do IBGE. Pinos e rótulos
+// ficam por cima, para os rótulos poderem se afastar uns dos outros sem sobrepor.
+let estados = null, proj = null;
+const LIMITES = { oeste: -74.2, leste: -34.6, norte: 5.4, sul: -33.9 };
+const merc = lat => Math.log(Math.tan(Math.PI / 4 + lat * Math.PI / 360));
+function projecao() {
+  const box = $('#sobre'), W = box.clientWidth, H = box.clientHeight, pad = 18;
+  const x0 = LIMITES.oeste, x1 = LIMITES.leste, y0 = merc(LIMITES.norte), y1 = merc(LIMITES.sul);
+  const k = Math.min((W - 2 * pad) / ((x1 - x0) * Math.PI / 180), (H - 2 * pad) / (y0 - y1));
+  const ox = (W - (x1 - x0) * Math.PI / 180 * k) / 2, oy = (H - (y0 - y1) * k) / 2;
+  proj = ([lat, lon]) => ({ x: ox + (lon - x0) * Math.PI / 180 * k, y: oy + (y0 - merc(lat)) * k });
 }
-// projeção: Leaflet se carregou; senão, uma projeção simples para pelo menos mostrar os pontos
-function ponto(ll) {
-  if (mapa) { const p = mapa.latLngToContainerPoint(ll); return { x: p.x, y: p.y }; }
-  const box = $('#sobre').getBoundingClientRect();
-  const [[n, o], [s, l]] = LIMITES;
-  return { x: (ll[1] - o) / (l - o) * box.width, y: (n - ll[0]) / (n - s) * box.height };
+const ponto = ll => proj(ll);
+function desenharEstados() {
+  if (!estados) return;
+  projecao();
+  const caminho = anel => 'M' + anel.map(([lon, lat]) => { const p = proj([lat, lon]); return p.x.toFixed(1) + ',' + p.y.toFixed(1); }).join('L') + 'Z';
+  let svg = '', siglas = '';
+  for (const f of estados.features) {
+    const polis = f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates;
+    svg += `<path class="uf" d="${polis.map(p => p.map(caminho).join('')).join('')}"/>`;
+    // sigla no centro do maior polígono do estado
+    const anel = polis.map(p => p[0]).sort((a, b) => area(b) - area(a))[0];
+    const c = centro(anel), p = proj([c[1], c[0]]);
+    siglas += `<text class="sigla" x="${p.x.toFixed(1)}" y="${p.y.toFixed(1)}">${f.properties.uf}</text>`;
+  }
+  $('#mapa').innerHTML = svg + siglas;
+}
+function area(a) { let s = 0; for (let i = 0, j = a.length - 1; i < a.length; j = i++) s += (a[j][0] + a[i][0]) * (a[j][1] - a[i][1]); return Math.abs(s / 2); }
+function centro(a) {
+  let x = 0, y = 0, s = 0;
+  for (let i = 0, j = a.length - 1; i < a.length; j = i++) {
+    const f = a[j][0] * a[i][1] - a[i][0] * a[j][1];
+    x += (a[j][0] + a[i][0]) * f; y += (a[j][1] + a[i][1]) * f; s += f;
+  }
+  return [x / (3 * s), y / (3 * s)];
 }
 
 function desenharMapa() {
-  if (!estado) return;
+  if (!estado || !proj) return;
   const sobre = $('#sobre'), svg = $('#linhas');
   sobre.querySelectorAll('.pino,.rotulo').forEach(e => e.remove());
   svg.innerHTML = '';
@@ -175,13 +189,13 @@ function desenharMapa() {
   const grupos = new Map(), semLocal = [];
   for (const l of estado.locais) {
     if (l.vagas === 0) continue;
-    const ll = CIDADES[chave(l.cidade)];
+    const ll = localizar(l.cidade);
     if (!ll) { semLocal.push(`${l.om} (${l.cidade || 'sem cidade'})`); continue; }
-    const k = chave(l.cidade);
+    const k = ll.join(',');
     if (!grupos.has(k)) grupos.set(k, { ll, oms: [] });
     grupos.get(k).oms.push(l);
   }
-  $('#semLocal').innerHTML = semLocal.length ? `Fora do mapa (cidade sem coordenadas): ${semLocal.map(esc).join(', ')}` : '';
+  $('#semLocal').innerHTML = semLocal.length ? `Fora do mapa (cidade não encontrada; use o formato Cidade-UF): ${semLocal.map(esc).join(', ')}` : '';
 
   const itens = [...grupos.entries()].map(([k, g]) => {
     const livres = g.oms.reduce((s, l) => s + l.restantes, 0);
@@ -315,9 +329,24 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 manterAcesa();
 
 let tRedim;
-window.addEventListener('resize', () => { clearTimeout(tRedim); tRedim = setTimeout(() => { if (mapa) { mapa.invalidateSize(); mapa.fitBounds(LIMITES, { padding: [10, 10] }); } desenharMapa(); }, 200); });
+window.addEventListener('resize', () => { clearTimeout(tRedim); tRedim = setTimeout(() => { desenharEstados(); desenharMapa(); }, 200); });
 
-criarMapa();
+// carrega a malha dos estados e a lista de municípios (arquivos do próprio site) e conecta
+(async () => {
+  try {
+    const [uf, mun] = await Promise.all([fetch('/brasil-uf.json').then(r => r.json()), fetch('/municipios.json').then(r => r.json())]);
+    estados = uf;
+    municipios = new Map(); porNome = new Map();
+    for (const [nome, sigla, lat, lon] of mun) {
+      const ll = [lat, lon], n = norm(nome);
+      municipios.set(n + '|' + sigla, ll);
+      if (!porNome.has(n)) porNome.set(n, []);
+      porNome.get(n).push(ll);
+    }
+    desenharEstados();
+  } catch (e) { $('#semLocal').textContent = 'Não foi possível carregar o mapa.'; }
+  if (estado) render();
+})();
 conectar();
 </script>
 </body>

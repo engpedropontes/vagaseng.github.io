@@ -174,7 +174,7 @@ function lerCorpo(req) {
   });
 }
 
-const TIPOS = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon' };
+const TIPOS = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.json': 'application/json; charset=utf-8', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon' };
 function estatico(req, res) {
   const p = decodeURIComponent(new URL(req.url, 'http://x').pathname);
   const arq = path.normalize(path.join(PUBLIC_DIR, p === '/' ? 'index.html' : p));
