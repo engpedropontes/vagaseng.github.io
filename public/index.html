@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Escolha de OM - Eng EsAO</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏰</text></svg>">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 56'%3E%3Cg fill='%23F4C430'%3E%3Cpath d='M2 8h4v5h4V8h4v5h4V8h4v46H2z'/%3E%3Cpath d='M38 8h4v5h4V8h4v5h4V8h4v46H38z'/%3E%3Cpath d='M20 0h4v5h4V0h8v5h4V0h4v54H20z'/%3E%3C/g%3E%3Cpath fill='%230A1628' d='M27 54V44a5 5 0 0 1 10 0v10z'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
@@ -29,11 +29,23 @@ button{cursor:pointer}
 
 /* cabeçalho */
 header.topo{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:14px}
-h1{font:700 clamp(30px,5vw,46px)/1 var(--cond);margin:0;letter-spacing:.01em}
+h1{font:700 clamp(30px,5vw,46px)/1 var(--cond);margin:0;letter-spacing:.01em;display:flex;align-items:center;gap:.35em}
+h1 .insignia{height:1em;width:auto;flex:none;color:var(--ambar)}
 .progresso{font:600 18px/1.2 var(--cond);color:var(--tinta2);text-align:right}
 .barra{height:6px;background:var(--grade);margin-top:6px;width:220px;max-width:60vw}
 .barra i{display:block;height:100%;background:var(--oliva);transition:width .4s}
 .linkadm{color:var(--tinta2);font-size:13px;background:none;border:0;text-decoration:underline;padding:0;margin:0 12px 0 10px}
+
+/* faixa compacta que aparece presa no topo quando a faixa principal sai da tela */
+.faixa-mini{position:fixed;top:0;left:0;right:0;z-index:45;display:flex;gap:14px;align-items:baseline;flex-wrap:wrap;
+  padding:8px 16px;background:var(--turquesa);color:#fff;font:600 16px/1.2 var(--cond);box-shadow:0 2px 12px rgba(0,0,0,.45);
+  transform:translateY(-110%);transition:transform .25s}
+.faixa-mini.on{transform:none}
+.faixa-mini b{font-size:20px}
+.faixa-mini .prox{color:#D7E6FA;font-weight:500}
+.faixa-mini.vez{background:var(--ambar);color:#0A1628}
+.faixa-mini.vez .prox{color:#2E2A12}
+.faixa-mini.pausa{background:#2E2A12;color:var(--ambar)}
 
 /* faixa de vez (elemento central) */
 .faixa{display:grid;grid-template-columns:1.4fr 1fr auto;border:2px solid var(--borda);background:var(--papel);margin-bottom:18px}
@@ -102,6 +114,15 @@ table{border-collapse:collapse;width:100%}
 .quadro tr.semvaga td.om,.quadro tr.semvaga td.cid,.quadro tr.semvaga td.nv{color:#5D7394}
 .quadro tr.cheio td.nv{color:#8CC0FF;font-weight:700}
 .quadro td.acao{padding:3px}
+.quadro th.th-vagas,.quadro td.vagas{text-align:left;width:99%}
+.fichas{display:flex;flex-wrap:wrap;gap:5px}
+.ficha{min-width:130px;padding:3px 10px;text-align:center;font:600 15px/1.3 var(--cond);border:1px solid transparent}
+.ficha.ocup{background:var(--oliva);color:#fff}
+.ficha.ocup.eu{background:var(--ambar);color:#0A1628}
+.ficha.ocup.fixo{background:#15426F;outline:2px dashed #6FA8E8;outline-offset:-4px}
+.ficha.ocup.fixo::before{content:"🔒 ";font-size:.85em}
+.ficha.ocup.fixo.eu{background:var(--ambar);outline-color:#0A1628}
+.ficha.livre{border:1px dashed var(--borda);color:#5D7394;font-weight:500;letter-spacing:.04em}
 .quadro .escolher{background:var(--ambar);color:#0A1628;border:2px solid var(--ambar);font:700 15px var(--cond);padding:4px 12px}
 .quadro .escolher:hover{background:#FFD659}
 
@@ -207,7 +228,7 @@ table{border-collapse:collapse;width:100%}
 .cartao.cheio .c-livres{color:#8CC0FF}
 .c-vagas{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
 .c-vagas .slot{flex:1 1 120px;padding:6px 8px;text-align:center;font:600 15px/1.2 var(--cond);border:1px solid var(--grade)}
-.c-vagas .slot.livre{color:var(--tinta2);font-weight:500}
+.c-vagas .slot.livre{color:#5D7394;font-weight:500;background:transparent;border:1px dashed var(--borda);text-transform:lowercase;letter-spacing:.04em}
 .cartao.semvaga .c-nome,.cartao.semvaga .c-livres{opacity:.55}
 .cartao .escolher{background:var(--ambar);color:#0A1628;border:2px solid var(--ambar);font:700 16px var(--cond);padding:9px 14px;min-height:44px}
 .alternar{display:none;border:2px solid var(--borda);margin-bottom:12px}
@@ -251,9 +272,10 @@ table{border-collapse:collapse;width:100%}
 </style>
 </head>
 <body>
+<div class="faixa-mini" id="faixaMini" aria-hidden="true"></div>
 <div class="wrap">
   <header class="topo">
-    <h1>Escolha de OM - Eng EsAO</h1>
+    <h1><svg class="insignia" viewBox="0 0 64 56" aria-hidden="true"><g fill="currentColor"><path d="M2 8h4v5h4V8h4v5h4V8h4v46H2z"/><path d="M42 8h4v5h4V8h4v5h4V8h4v46H42z" transform="translate(-4 0)"/><path d="M20 0h4v5h4V0h8v5h4V0h4v54H20z"/></g><g fill="var(--campo)"><path d="M27 54V44a5 5 0 0 1 10 0v10z"/><rect x="8" y="22" width="4" height="7"/><rect x="48" y="22" width="4" height="7"/><rect x="30" y="16" width="4" height="7"/></g></svg>Escolha de OM - Eng EsAO</h1>
     <div class="progresso">
       <span id="contagem">Carregando…</span>
       <div class="barra"><i id="barra" style="width:0"></i></div>
@@ -366,6 +388,13 @@ function render() {
     <div class="acao">${eu ? `<button class="btn" id="sair">Sair (${esc(eu.nome)})</button>`
                            : `<button class="btn btn-cta" id="entrar">SENHA</button>`}</div>${aviso}`;
 
+  // faixa compacta (aparece presa no topo ao rolar a página)
+  const mini = $('#faixaMini');
+  mini.className = 'faixa-mini' + (mini.classList.contains('on') ? ' on' : '') + (minhaVez() ? ' vez' : estado.pausado || fim ? ' pausa' : '');
+  mini.innerHTML = fim ? '<b>Escolha concluída</b>'
+    : `<span>${minhaVez() ? 'SUA VEZ' : 'Escolhendo agora'}${estado.pausado ? ' (pausado)' : ''}</span><b>${esc(estado.atual?.nome || '—')}</b><span class="cron"></span>`
+      + (estado.proximo ? `<span class="prox">Próximo: ${esc(estado.proximo.nome)}</span>` : '');
+
   // área pessoal
   const area = $('#minhaArea');
   if (modoAdm()) {
@@ -416,23 +445,19 @@ function render() {
   eraMinhaVez = agoraVez;
   const podeEscolher = agoraVez || modoAdm();
 
-  // quadro
-  const maxSlots = Math.max(1, ...estado.locais.map(l => l.vagas));
-  let h = '<thead><tr>' + (podeEscolher ? '<th class="acao"></th>' : '') + '<th>OM</th><th>Cidade</th><th>Livres</th>';
-  for (let i = 0; i < maxSlots; i++) h += `<th>Militar ${i + 1}</th>`;
-  h += '</tr></thead><tbody>';
+  // quadro: cada vaga é uma "ficha" (preenchida com o nome ou livre)
+  let h = '<thead><tr>' + (podeEscolher ? '<th class="acao"></th>' : '') + '<th>OM</th><th>Cidade</th><th>Livres</th><th class="th-vagas">Vagas</th></tr></thead><tbody>';
   for (const l of estado.locais) {
     if (l.vagas === 0 || (soVaga && l.restantes === 0)) continue;
-    const rc = l.vagas === 0 ? 'semvaga' : l.restantes === 0 ? 'cheio' : '';
-    h += `<tr class="${rc}">`;
+    h += `<tr class="${l.restantes === 0 ? 'cheio' : ''}">`;
     if (podeEscolher) h += `<td class="acao">${l.restantes > 0 ? `<button class="escolher" data-local="${l.id}">Escolher</button>` : ''}</td>`;
-    h += `<td class="om">${esc(l.om)}</td><td class="cid">${esc(l.cidade)}</td><td class="nv">${l.restantes}/${l.vagas}</td>`;
-    for (let i = 0; i < maxSlots; i++) {
-      if (i < l.ocupantes.length) h += `<td class="slot ocup ${eu && l.ocupantes[i] === eu.nome ? 'eu' : ''} ${(l.fixos || []).includes(l.ocupantes[i]) ? 'fixo' : ''}" ${(l.fixos || []).includes(l.ocupantes[i]) ? 'title="Vaga fixa definida pela administração"' : ''}>${esc(l.ocupantes[i])}</td>`;
-      else if (i < l.vagas) h += '<td class="slot livre"></td>';
-      else h += '<td class="slot fech" aria-label="sem vaga"></td>';
+    h += `<td class="om">${esc(l.om)}</td><td class="cid">${esc(l.cidade)}</td><td class="nv">${l.restantes}/${l.vagas}</td><td class="vagas"><div class="fichas">`;
+    for (let i = 0; i < l.vagas; i++) {
+      const n = l.ocupantes[i], fixo = n && (l.fixos || []).includes(n);
+      h += n ? `<span class="ficha ocup${eu && n === eu.nome ? ' eu' : ''}${fixo ? ' fixo' : ''}"${fixo ? ' title="Vaga fixa definida pela administração"' : ''}>${esc(n)}</span>`
+        : '<span class="ficha livre">livre</span>';
     }
-    h += '</tr>';
+    h += '</div></td></tr>';
   }
   $('#quadro').innerHTML = h + '</tbody>';
 
@@ -472,6 +497,10 @@ function cronometro() {
   document.querySelectorAll('.cron').forEach(el => el.textContent = txt);
 }
 setInterval(cronometro, 1000);
+
+// mostra a faixa compacta quando a faixa principal sai da tela (só no quadro)
+new IntersectionObserver(([e]) => $('#faixaMini').classList.toggle('on', !e.isIntersecting && !$('#home').hidden))
+  .observe($('#faixa'));
 
 function vista(v) {
   $('#grade').dataset.vista = v;
@@ -676,6 +705,27 @@ function renderAdmin() {
 }
 
 // Imprime (ou salva em PDF) o quadro e a classificação em fundo branco
+// Quadro para a impressão: grade com uma coluna por vaga ("Militar 1, 2…")
+function gradeImpressao() {
+  const maxSlots = Math.max(1, ...estado.locais.map(l => l.vagas));
+  let h = '<thead><tr><th>OM</th><th>Cidade</th><th>Livres</th>';
+  for (let i = 0; i < maxSlots; i++) h += `<th>Militar ${i + 1}</th>`;
+  h += '</tr></thead><tbody>';
+  for (const l of estado.locais) {
+    if (l.vagas === 0 || (soVaga && l.restantes === 0)) continue;
+    h += `<tr><td class="om">${esc(l.om)}</td><td class="cid">${esc(l.cidade)}</td><td class="nv">${l.restantes}/${l.vagas}</td>`;
+    for (let i = 0; i < maxSlots; i++) {
+      if (i < l.ocupantes.length) h += `<td class="slot ocup ${(l.fixos || []).includes(l.ocupantes[i]) ? 'fixo' : ''}">${esc(l.ocupantes[i])}</td>`;
+      else h += i < l.vagas ? '<td class="slot livre"></td>' : '<td class="slot fech"></td>';
+    }
+    h += '</tr>';
+  }
+  const t = document.createElement('table');
+  t.className = 'quadro';
+  t.innerHTML = h + '</tbody>';
+  return t;
+}
+
 // Classificação para a impressão: uma coluna só, larga, para OM e cidade caberem inteiras
 function tabelaClassificacao() {
   const situacao = c => c.localId ? (c.fixo ? 'Vaga fixa: ' : '') + nomeOm(c.localId)
@@ -689,9 +739,7 @@ function tabelaClassificacao() {
 function imprimir() {
   render();
   const total = estado.locais.reduce((s, l) => s + l.vagas, 0);
-  const tabela = $('#quadro').cloneNode(true);
-  tabela.removeAttribute('id');
-  tabela.querySelectorAll('.acao').forEach(c => c.remove());
+  const tabela = gradeImpressao();
   // larguras de OM, cidade e livres encolhem quando há mais colunas de militares (que dividem o resto);
   // a letra dos nomes também fica menor, e igual para todos, com 3 ou mais colunas
   const nMil = tabela.querySelectorAll('thead th').length - 3;
