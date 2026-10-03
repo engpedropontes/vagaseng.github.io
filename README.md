@@ -35,6 +35,16 @@ sobreviva a reinícios. Opções simples:
 Evite planos com disco efêmero (ex.: Render gratuito): os dados somem ao reiniciar.
 Use o botão **Baixar backup** no admin periodicamente.
 
+## Telão
+
+Abra `/telao.html` (ou o botão **Abrir telão** em Administração > Andamento) numa
+TV ou projetor. Mostra o mapa do Brasil com as OMs e as vagas livres, quem está
+escolhendo, o próximo e as últimas escolhas; atualiza sozinho. Clique na tela
+para ficar em tela cheia.
+
+As coordenadas das cidades ficam na tabela `CIDADES` de `public/telao.html`.
+Uma OM cadastrada numa cidade que não está lá aparece listada no canto do mapa.
+
 ## Regras implementadas
 
 - Só o primeiro militar sem OM (na ordem da classificação) consegue escolher;
