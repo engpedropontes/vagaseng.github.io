@@ -144,7 +144,7 @@ function estadoPublico() {
     proximo: fila[1] ? { id: fila[1].id, nome: fila[1].nome } : null,
     totalRestante: totalRestante(),
     historico: db.alocacoes.map(a => ({
-      nome: nome(a.usuarioId), local: db.locais.find(l => l.id === a.localId), ts: a.ts, auto: !!a.auto, admin: !!a.admin,
+      usuarioId: a.usuarioId, nome: nome(a.usuarioId), local: db.locais.find(l => l.id === a.localId), ts: a.ts, auto: !!a.auto, admin: !!a.admin,
     })).map(h => ({ ...h, local: h.local ? `${h.local.om} (${h.local.cidade})` : '?' })),
   };
 }
@@ -475,6 +475,16 @@ async function rotear(req, res) {
   }
 
   if (rota === 'POST /api/admin/pausa') { db.pausado = !!corpo.pausado; mudou(); return json(res, 200, { ok: true }); }
+
+  // Desfaz a escolha de um militar qualquer (não só a última). Ele volta para a fila
+  // na sua posição da classificação; as escolhas são pausadas para o admin conferir.
+  if (rota === 'POST /api/admin/desfazer-escolha') {
+    const a = db.alocacoes.find(x => x.usuarioId === corpo.usuarioId);
+    if (!a) return erro(res, 404, 'Esta escolha já não existe. Atualize a página.');
+    db.alocacoes = db.alocacoes.filter(x => x !== a);
+    db.pausado = true;
+    mudou(); return json(res, 200, { ok: true });
+  }
 
   if (rota === 'POST /api/admin/desfazer') {
     // desfaz a última escolha manual e as automáticas que vieram depois dela
