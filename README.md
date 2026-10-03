@@ -48,6 +48,21 @@ consultando a lista de municípios do IBGE em `public/municipios.json`. O mapa
 com a divisão dos estados vem da malha do IBGE (`public/brasil-uf.json`).
 Uma OM cuja cidade não for encontrada aparece listada no canto do mapa.
 
+## Preferências e prévia
+
+Em Administração > Preferências, cole o link da planilha pública do Google
+(com a aba de preferências aberta, para o link levar o `gid` dela). A aba precisa
+ter a coluna **NOME** e as colunas **OM 01**, **OM 02**… em ordem de prioridade,
+cada uma no formato `OM - Cidade` (ex.: `1º BEC - Caicó-RN`). O servidor lê a
+planilha ao salvar, ao clicar em "Sincronizar agora" e sozinho a cada 5 minutos,
+e avisa os nomes ou OMs que não encontrar no site.
+
+Com as preferências, o site calcula uma **prévia**: seguindo a classificação, cada
+militar ainda sem OM fica com a primeira opção que ainda tiver vaga. A prévia
+aparece na classificação, no cartão de cada militar, na impressão do quadro e na
+aba Preferências. No modo administrador, o botão "Escolher pela preferência"
+escolhe pelo militar da vez a primeira opção dele que ainda tiver vaga.
+
 ## Regras implementadas
 
 - Só o primeiro militar sem OM (na ordem da classificação) consegue escolher;

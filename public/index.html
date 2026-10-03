@@ -114,6 +114,13 @@ table{border-collapse:collapse;width:100%}
 .fila li.atual .n,.fila li.atual .s{color:#fff}
 .fila li.prox{background:var(--ambar-claro);box-shadow:inset 4px 0 var(--ambar)}
 .fila li.voce .q::after{content:" (você)";font-weight:400}
+.fila .pv{display:block;color:#8CC0FF;font-size:12px}
+.fila .pv b{font-weight:600}
+.fila li.atual .pv{color:#fff}
+.previa-meu{margin-top:6px;color:var(--tinta2)}
+.previa-meu b{display:inline;font:600 inherit;color:var(--tinta)}
+.prefs td.ok{color:#8CC0FF}
+.avisos{margin:0;padding:10px 12px 10px 30px;color:var(--ambar);font-size:14px}
 
 /* modal */
 .fundo{position:fixed;inset:0;background:rgba(3,9,20,.72);display:flex;align-items:center;justify-content:center;padding:16px;z-index:50}
@@ -153,6 +160,8 @@ table{border-collapse:collapse;width:100%}
 #impressao .fila li{grid-template-columns:28px 1fr 1.3fr;align-items:baseline;background:#fff;color:#000;box-shadow:none;border-bottom:1px solid #ccc;padding:4px 0;break-inside:avoid}
 #impressao .fila .n,#impressao .fila .q,#impressao .fila .s{color:#000;white-space:nowrap;overflow:hidden}
 #impressao .fila .s{grid-column:auto}
+#impressao .fila .pv{display:inline;color:#000;font-size:inherit}
+#impressao .fila .s:has(.pv) .st,#impressao .fila .pv .cid{display:none}
 #impressao .fila li.voce .q::after{content:none}
 @media print{
   body.imprimir{background:#fff;color:#000;padding:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}
@@ -325,6 +334,15 @@ function conectar() {
 const modoAdm = () => !!(admTok && estado?.atual && !minhaVez());
 const minhaVez = () => !!(eu && estado && !estado.pausado && estado.atual?.id === eu.id);
 
+// "4º BEC (Barreiras-BA)" para um id de OM
+const nomeOm = id => { const l = estado.locais.find(x => x.id === id); return l ? `${l.om} (${l.cidade})` : ''; };
+// texto da prévia (planilha de preferências) de um militar da classificação
+function textoPrevia(c) {
+  if (!c?.previa) return '';
+  if (c.previa.esgotadas) return 'prévia: preferências da planilha já preenchidas';
+  return `prévia: ${nomeOm(c.previa.localId)} · ${c.previa.opcao}ª opção`;
+}
+
 function render() {
   if (!estado) return;
   const total = estado.locais.reduce((s, l) => s + l.vagas, 0);
@@ -345,7 +363,11 @@ function render() {
 
   // área pessoal
   const area = $('#minhaArea');
-  if (modoAdm()) area.innerHTML = `<div class="meu vez adm-vez"><div class="status"><b>Modo administrador: escolhendo por ${esc(estado.atual.nome)}</b>Toque em "Escolher" na OM desejada. Após confirmar, a vez passa para ${esc(estado.proximo?.nome || 'o próximo')} e você continua escolhendo pelo seguinte.${estado.pausado ? ' As escolhas estão pausadas para os militares, mas o administrador pode escolher.' : ''}</div><button class="btn" id="sairAdmHome">Sair do modo admin</button></div>`;
+  if (modoAdm()) {
+    const pv = estado.classificacao.find(c => c.id === estado.atual.id)?.previa;
+    const porPref = pv?.localId ? `<button class="btn btn-cta escolher" data-local="${pv.localId}">Escolher pela preferência: ${esc(nomeOm(pv.localId))} (${pv.opcao}ª opção)</button>` : '';
+    area.innerHTML = `<div class="meu vez adm-vez"><div class="status"><b>Modo administrador: escolhendo por ${esc(estado.atual.nome)}</b>Toque em "Escolher" na OM desejada. Após confirmar, a vez passa para ${esc(estado.proximo?.nome || 'o próximo')} e você continua escolhendo pelo seguinte.${estado.pausado ? ' As escolhas estão pausadas para os militares, mas o administrador pode escolher.' : ''}${pv?.esgotadas ? ' As OMs da lista de preferências dele já foram preenchidas.' : ''}</div>${porPref}<button class="btn" id="sairAdmHome">Sair do modo admin</button></div>`;
+  }
   else if (!eu) area.innerHTML = '';
   else {
     const me = estado.classificacao.find(c => c.id === eu.id);
@@ -367,9 +389,10 @@ function render() {
     } else {
       status = `<b>Aguardando sua vez</b>${aFrente} militar(es) à sua frente. A escolha abre sozinha quando chegar sua vez. Restam ${estado.totalRestante} vagas em ${abertas.length} OM.`;
     }
+    const pv = textoPrevia(me);
     area.innerHTML = `<div class="meu ${cls}"><div><div class="pos">${me.pos}º</div></div>
       <div><div class="nome">${esc(eu.nome)}</div><div style="color:var(--tinta2)">posição na classificação de ${estado.classificacao.length}</div></div>
-      <div class="status">${status}</div></div>`;
+      <div class="status">${status}${pv ? `<div class="previa-meu">Pela sua lista de preferências (planilha), você ficaria em: <b>${esc(pv.replace(/^prévia: /, ''))}</b></div>` : ''}</div></div>`;
   }
 
   // aviso de chegada da vez
@@ -415,11 +438,15 @@ function render() {
   $('#abaFila').textContent = meuPos ? `Classificação (${meuPos}º)` : 'Classificação';
 
   // classificação
-  const omDe = id => { const l = estado.locais.find(x => x.id === id); return l ? `${l.om} (${l.cidade})` : ''; };
+  const omDe = nomeOm;
   $('#fila').innerHTML = estado.classificacao.map(c => {
     const k = [c.localId ? 'ja' : '', estado.atual?.id === c.id ? 'atual' : '', estado.proximo?.id === c.id ? 'prox' : '', eu?.id === c.id ? 'voce' : ''].join(' ');
     const s = c.localId ? (c.fixo ? 'Vaga fixa: ' : '') + omDe(c.localId) : estado.atual?.id === c.id ? 'Escolhendo agora' : estado.proximo?.id === c.id ? 'Próximo' : 'Aguardando';
-    return `<li class="${k}"><span class="n">${c.pos}º</span><span class="q">${esc(c.nome)}</span><span class="s">${esc(s)}</span></li>`;
+    // prévia: na tela vem abaixo do status; na impressão substitui o status e omite a cidade
+    const l = c.previa?.localId && estado.locais.find(x => x.id === c.previa.localId);
+    const pv = l ? `<span class="pv">prévia: <b>${esc(l.om)}</b><span class="cid"> (${esc(l.cidade)})</span> · ${c.previa.opcao}ª opção</span>`
+      : c.previa?.esgotadas ? `<span class="pv">${esc(textoPrevia(c))}</span>` : '';
+    return `<li class="${k}"><span class="n">${c.pos}º</span><span class="q">${esc(c.nome)}</span><span class="s"><span class="st">${esc(s)}</span>${pv}</span></li>`;
   }).join('') || '<li><span></span><span class="s">Nenhum militar cadastrado.</span></li>';
   cronometro();
 }
@@ -585,6 +612,29 @@ function renderAdmin() {
       </tbody></table></div>
       <div class="legenda">O militar com vaga fixa ocupa a vaga, é pulado na ordem de escolha e continua na vaga mesmo depois de "Resetar todas as escolhas". Ao soltar, ele volta para a fila na sua posição da classificação.</div></div>`;
   }
+  if (aba === 'prefs') {
+    const p = d.planilha;
+    const quando = t => t ? new Date(t).toLocaleString('pt-BR') : '—';
+    const pendentes = d.classificacao.filter(c => !c.localId);
+    const maxOp = Math.max(4, ...d.classificacao.map(c => c.prefs.length));
+    corpo = `<div class="painel">
+      <form class="form" id="fPlanilha"><label style="flex:1;min-width:240px">Link da planilha do Google (com a aba Notas aberta)
+        <input name="url" value="${esc(p?.url || '')}" placeholder="https://docs.google.com/spreadsheets/d/…/edit#gid=…"></label>
+        <button class="btn btn-pri">Salvar e sincronizar</button>
+        ${p?.url ? '<button type="button" class="btn" data-a="sincronizar">Sincronizar agora</button>' : ''}</form>
+      <div class="bloco"><div>${p?.url
+        ? `Última leitura: <b>${quando(p.ultimaSync)}</b> &nbsp; Militares com preferências: <b>${p.total ?? 0}</b><br>A planilha é lida de novo sozinha a cada 5 minutos.`
+          + (p.erro ? `<br><b style="color:var(--perigo)">Erro na última tentativa (${quando(p.tentativa)}): ${esc(p.erro)}</b>` : '')
+        : 'Nenhuma planilha configurada. A planilha precisa estar pública (qualquer pessoa com o link pode ver), com a coluna NOME e as colunas OM 01, OM 02… Cada OM no formato "OM - Cidade".'}</div></div>
+      ${p?.avisos?.length ? `<ul class="avisos">${p.avisos.map(a => `<li>${esc(a)}</li>`).join('')}</ul>` : ''}
+      <h2>Prévia (simulação pela ordem de classificação)</h2>
+      <div class="rolagem"><table class="prefs"><thead><tr><th>Posição</th><th>Militar</th><th>Prévia</th>${Array.from({ length: maxOp }, (_, i) => `<th>${i + 1}ª opção</th>`).join('')}</tr></thead><tbody>
+      ${pendentes.map(c => `<tr><td>${c.pos}º</td><td>${esc(c.nome)}</td>
+        <td>${c.previa?.localId ? `<b>${esc(omDe(c.previa.localId))}</b>` : c.previa?.esgotadas ? 'opções já preenchidas' : '<span style="color:var(--tinta2)">sem preferências</span>'}</td>
+        ${Array.from({ length: maxOp }, (_, i) => `<td class="${c.previa?.localId && c.prefs[i] === c.previa.localId ? 'ok' : ''}">${esc(c.prefs[i] ? omDe(c.prefs[i]) : '')}</td>`).join('')}</tr>`).join('') || `<tr><td colspan="${maxOp + 3}">Todos os militares já têm OM.</td></tr>`}
+      </tbody></table></div>
+      <div class="legenda">A prévia considera as escolhas já feitas e as vagas fixas. Militares sem preferências na planilha não ocupam vaga na simulação, então quem vem depois deles pode acabar com outra OM no dia.</div></div>`;
+  }
   if (aba === 'oms') {
     corpo = `<div class="painel">
       <form class="form" id="fLocal"><label>OM<input name="om" required placeholder="Ex.: 10º BEC"></label>
@@ -603,6 +653,7 @@ function renderAdmin() {
       <button class="${aba === 'militares' ? 'on' : ''}" data-aba="militares">Militares e senhas</button>
       <button class="${aba === 'fixas' ? 'on' : ''}" data-aba="fixas">Vagas fixas</button>
       <button class="${aba === 'oms' ? 'on' : ''}" data-aba="oms">OMs e vagas</button>
+      <button class="${aba === 'prefs' ? 'on' : ''}" data-aba="prefs">Preferências</button>
       <button data-aba="sair" style="margin-left:auto">Sair do admin</button></div>${corpo}`;
   cronometro();
 }
@@ -667,6 +718,7 @@ $('#admin').addEventListener('click', async e => {
   if (ds.senha) { const s = prompt('Nova senha (4 dígitos, nenhum dígito repetido mais de 2 vezes):'); if (s) await adm('PUT', '/api/admin/usuarios/' + ds.senha, { senha: s }); }
   if (ds.apagarU && confirm('Excluir este militar e sua escolha?')) await adm('DELETE', '/api/admin/usuarios/' + ds.apagarU);
   if (ds.a === 'imprimir') imprimir();
+  if (ds.a === 'sincronizar') { t.disabled = true; t.textContent = 'Sincronizando…'; try { await adm('POST', '/api/admin/planilha/sincronizar'); } finally { carregarAdmin(); } }
   const l = d.locais.find(x => x.id === (ds.vmais || ds.vmenos || ds.editarL));
   if (ds.vmais) await adm('PUT', '/api/admin/locais/' + l.id, { vagas: l.vagas + 1 });
   if (ds.vmenos && l.vagas > 0) await adm('PUT', '/api/admin/locais/' + l.id, { vagas: l.vagas - 1 });
@@ -697,6 +749,10 @@ $('#admin').addEventListener('submit', async e => {
     alert(`Militar cadastrado. Senha: ${r.senha}`);
   }
   if (e.target.id === 'fLocal') await adm('POST', '/api/admin/locais', f);
+  if (e.target.id === 'fPlanilha') {
+    const b = e.target.querySelector('.btn-pri'); b.disabled = true; b.textContent = 'Sincronizando…';
+    try { await adm('POST', '/api/admin/planilha', { url: f.url }); } finally { carregarAdmin(); }
+  }
   if (e.target.id === 'fFixo') {
     const c = admDados.classificacao.find(x => x.id === f.usuarioId);
     if (c?.localId && !confirm(`${c.nome} já escolheu uma OM. A escolha será substituída pela vaga fixa. Continuar?`)) return;
