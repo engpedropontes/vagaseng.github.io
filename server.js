@@ -43,6 +43,7 @@ function carregar() {
     db.preferencias = db.preferencias || {};
     db.planilha = db.planilha || null;
     db.aberturaProgramada = db.aberturaProgramada || null;
+    if (db.backupMarco === undefined) db.backupMarco = Math.floor(db.alocacoes.length / A_CADA) * A_CADA;
     marcarVez();
   } catch {
     db = seed();
@@ -57,6 +58,68 @@ function salvar() {
   const tmp = DATA_FILE + '.tmp';
   fs.writeFileSync(tmp, JSON.stringify(db, null, 2));
   fs.renameSync(tmp, DATA_FILE);
+}
+
+// ---------------------------------------------------------------- backups automáticos
+// Uma cópia do banco a cada 10 escolhas (vagas fixas não contam; o reset zera a
+// contagem) e outra quando a escolha termina. Ficam em backups/, ao lado do db.json
+// (no Railway, no volume), as MAX_BACKUPS mais recentes. Cada arquivo: { motivo, ts, db }.
+const PASTA_BACKUPS = path.join(path.dirname(DATA_FILE), 'backups');
+const MAX_BACKUPS = 50;
+const A_CADA = 10;
+const NOME_BACKUP = /^db-\d{15}\.json$/;
+let indiceBackups = null; // índice em memória: [{ arquivo, motivo, ts, escolhas }], mais novo primeiro
+
+// Chamada a cada mudança: decide se é hora de guardar uma cópia.
+// db.backupMarco = último múltiplo de 10 já guardado; db.backupFinal = cópia do fim já feita.
+function verificarBackup() {
+  const n = db.alocacoes.length;
+  const marco = Math.floor(n / A_CADA) * A_CADA;
+  if (marco < (db.backupMarco || 0)) db.backupMarco = marco; // reset ou escolhas desfeitas: volta a contar dali
+  if (marco > (db.backupMarco || 0)) { db.backupMarco = marco; backup(`${marco} escolhas`); }
+  const fim = n > 0 && (pendentes().length === 0 || totalRestante() === 0);
+  if (fim && !db.backupFinal) {
+    db.backupFinal = true;
+    backup(totalRestante() === 0 ? 'Escolha encerrada: todas as vagas preenchidas' : 'Escolha encerrada: todos os militares alocados');
+  }
+  if (!fim) db.backupFinal = false;
+}
+
+function lerIndiceBackups() {
+  if (indiceBackups) return indiceBackups;
+  indiceBackups = [];
+  try {
+    for (const arquivo of fs.readdirSync(PASTA_BACKUPS).filter(f => NOME_BACKUP.test(f)).sort().reverse()) {
+      try {
+        const b = JSON.parse(fs.readFileSync(path.join(PASTA_BACKUPS, arquivo), 'utf8'));
+        indiceBackups.push({ arquivo, motivo: b.motivo, ts: b.ts, escolhas: b.db?.alocacoes?.length ?? 0 });
+      } catch {}
+    }
+  } catch {}
+  return indiceBackups;
+}
+
+function backup(motivo) {
+  try {
+    lerIndiceBackups();
+    fs.mkdirSync(PASTA_BACKUPS, { recursive: true });
+    let ts = Date.now();
+    while (fs.existsSync(path.join(PASTA_BACKUPS, `db-${String(ts).padStart(15, '0')}.json`))) ts++;
+    const arquivo = `db-${String(ts).padStart(15, '0')}.json`;
+    fs.writeFileSync(path.join(PASTA_BACKUPS, arquivo), JSON.stringify({ motivo, ts, db }));
+    const indice = indiceBackups;
+    indice.unshift({ arquivo, motivo, ts, escolhas: db.alocacoes.length });
+    for (const velho of indice.splice(MAX_BACKUPS)) fs.rmSync(path.join(PASTA_BACKUPS, velho.arquivo), { force: true });
+  } catch (e) { console.error('Falha no backup automático:', e.message); }
+}
+
+// Substitui os dados atuais pelos de um backup; devolve uma mensagem de erro ou null.
+function restaurarDados(d) {
+  if (!d || !Array.isArray(d.locais) || !Array.isArray(d.usuarios) || !Array.isArray(d.alocacoes)) return 'Arquivo de backup inválido.';
+  db = { locais: d.locais, usuarios: d.usuarios, alocacoes: d.alocacoes, vinculos: Array.isArray(d.vinculos) ? d.vinculos : [], pausado: true, aberturaProgramada: null,
+    preferencias: d.preferencias && typeof d.preferencias === 'object' ? d.preferencias : {}, planilha: d.planilha || null,
+    backupMarco: Math.floor(d.alocacoes.length / A_CADA) * A_CADA, backupFinal: !!d.backupFinal };
+  return null;
 }
 
 function gerarSenha(lista = db.usuarios) {
@@ -171,7 +234,7 @@ function transmitir() {
 }
 setInterval(() => { for (const res of clientes) res.write(': ping\n\n'); }, 25000);
 
-function mudou() { alocacaoAutomatica(); marcarVez(); salvar(); transmitir(); }
+function mudou() { alocacaoAutomatica(); marcarVez(); verificarBackup(); salvar(); transmitir(); }
 
 // ---------------------------------------------------------------- sessões
 const sessoes = new Map(); // token -> { tipo: 'user'|'admin', id }
@@ -527,7 +590,31 @@ async function rotear(req, res) {
 
   if (rota === 'POST /api/admin/reset') {
     db.alocacoes = []; db.pausado = true; // vagas fixas (vinculos) são mantidas
+    db.backupMarco = 0; db.backupFinal = false; // a contagem de 10 em 10 recomeça
     mudou(); return json(res, 200, { ok: true });
+  }
+
+  if (rota === 'GET /api/admin/backups') return json(res, 200, lerIndiceBackups());
+
+  if (recurso === 'backups' && id && req.method === 'GET') {
+    if (!NOME_BACKUP.test(id)) return erro(res, 400, 'Backup inválido.');
+    try {
+      const b = JSON.parse(fs.readFileSync(path.join(PASTA_BACKUPS, id), 'utf8'));
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Content-Disposition': `attachment; filename="escolha-om-${id}"` });
+      return res.end(JSON.stringify(b.db, null, 2));
+    } catch { return erro(res, 404, 'Backup não encontrado.'); }
+  }
+
+  if (rota === 'POST /api/admin/backups/restaurar') {
+    const arq = String(corpo.arquivo || '');
+    if (!NOME_BACKUP.test(arq)) return erro(res, 400, 'Backup inválido.');
+    let b;
+    try { b = JSON.parse(fs.readFileSync(path.join(PASTA_BACKUPS, arq), 'utf8')); } catch { return erro(res, 404, 'Backup não encontrado.'); }
+    backup('Antes de restaurar um backup');
+    const falha = restaurarDados(b.db);
+    if (falha) return erro(res, 400, falha);
+    mudou();
+    return json(res, 200, { ok: true });
   }
 
   if (rota === 'GET /api/admin/backup') {
@@ -536,10 +623,9 @@ async function rotear(req, res) {
   }
 
   if (rota === 'POST /api/admin/restaurar') {
-    const d = corpo;
-    if (!Array.isArray(d.locais) || !Array.isArray(d.usuarios) || !Array.isArray(d.alocacoes)) return erro(res, 400, 'Arquivo de backup inválido.');
-    db = { locais: d.locais, usuarios: d.usuarios, alocacoes: d.alocacoes, vinculos: Array.isArray(d.vinculos) ? d.vinculos : [], pausado: true, aberturaProgramada: null,
-      preferencias: d.preferencias && typeof d.preferencias === 'object' ? d.preferencias : {}, planilha: d.planilha || null };
+    backup('Antes de restaurar um backup');
+    const falha = restaurarDados(corpo);
+    if (falha) return erro(res, 400, falha);
     mudou(); return json(res, 200, { ok: true });
   }
 
