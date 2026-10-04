@@ -666,13 +666,13 @@ function renderAdmin() {
       ${d.historico.map((h, i) => `<tr><td>${i + 1}</td><td>${new Date(h.ts).toLocaleString('pt-BR')}</td><td>${esc(h.nome)}</td><td>${esc(h.local)}</td><td>${h.auto ? 'Automática' : h.admin ? 'Pelo admin' : 'Escolha'}</td>
         <td><button class="desfazer-x" data-desfazer-u="${h.usuarioId}" title="Desfazer a escolha de ${esc(h.nome)}" aria-label="Desfazer a escolha de ${esc(h.nome)}">✕</button></td></tr>`).reverse().join('') || '<tr><td colspan="6">Nenhuma escolha ainda.</td></tr>'}
       </tbody></table></div>
-      <details class="backups" id="dBackups" ${backupsAbertos ? 'open' : ''}><summary>Backups automáticos (${admBackups.length}) — o servidor guarda uma cópia a cada mudança</summary>
+      <details class="backups" id="dBackups" ${backupsAbertos ? 'open' : ''}><summary>Backups automáticos (${admBackups.length}) — uma cópia a cada 10 escolhas e outra ao final</summary>
         <div class="rolagem"><table><thead><tr><th>Horário</th><th>O que aconteceu</th><th>Escolhas</th><th></th></tr></thead><tbody>
-        ${admBackups.map((b, i) => `<tr><td>${new Date(b.ts).toLocaleString('pt-BR')}</td><td>${esc(b.motivo)}${i === 0 ? ' <small>(estado atual)</small>' : ''}</td><td>${b.escolhas}</td>
-          <td>${i === 0 ? '' : `<button class="btn btn-sm" data-restaurar-b="${b.arquivo}">Restaurar</button> `}<button class="btn btn-sm" data-baixar-b="${b.arquivo}">Baixar</button></td></tr>`).join('')
+        ${admBackups.map(b => `<tr><td>${new Date(b.ts).toLocaleString('pt-BR')}</td><td>${esc(b.motivo)}</td><td>${b.escolhas}</td>
+          <td><button class="btn btn-sm" data-restaurar-b="${b.arquivo}">Restaurar</button> <button class="btn btn-sm" data-baixar-b="${b.arquivo}">Baixar</button></td></tr>`).join('')
           || '<tr><td colspan="4">Nenhum backup ainda.</td></tr>'}
         </tbody></table></div>
-        <div class="legenda">São mantidos os ${50} mais recentes, no volume do Railway. Restaurar pausa as escolhas e guarda antes uma cópia do estado atual, então nada se perde.</div>
+        <div class="legenda">Vagas fixas não contam; o reset recomeça a contagem. São mantidos os 50 mais recentes, no volume do Railway. Restaurar pausa as escolhas e guarda antes uma cópia do estado atual, então nada se perde.</div>
       </details></div>`;
   }
   if (aba === 'militares') {

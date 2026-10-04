@@ -34,9 +34,9 @@ sobreviva a reinícios. Opções simples:
 
 Evite planos com disco efêmero (ex.: Render gratuito): os dados somem ao reiniciar.
 
-**Backups automáticos:** a cada mudança (escolha, desfazer, reset, pausa, vaga fixa,
-edição no admin…) e ao ligar, o servidor guarda uma cópia em `backups/`, ao lado do
-`db.json` (no Railway, dentro do volume), mantendo as 50 mais recentes. Em
+**Backups automáticos:** a cada 10 escolhas (vagas fixas não contam; o reset zera a
+contagem) e quando a escolha termina, o servidor guarda uma cópia em `backups/`, ao
+lado do `db.json` (no Railway, dentro do volume), mantendo as 50 mais recentes. Em
 Administração > Andamento > "Backups automáticos" dá para restaurar ou baixar
 qualquer uma. Restaurar pausa as escolhas e guarda antes o estado atual.
 O botão **Baixar backup** continua servindo para guardar uma cópia fora do servidor.
