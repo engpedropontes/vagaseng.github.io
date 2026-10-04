@@ -133,6 +133,10 @@ a.btn-prefs{display:inline-block;text-decoration:none}
 .fila li.prox{background:var(--ambar-claro);box-shadow:inset 4px 0 var(--ambar)}
 .fila li.voce .q::after{content:" (você)";font-weight:400}
 .prefs td.ok{color:#8CC0FF}
+.online-txt{display:block;margin:2px 0 6px;font-weight:600}
+.ponto{display:inline-block;width:9px;height:9px;border-radius:50%;border:1.5px solid #5D7394;margin:0 6px 1px 0;vertical-align:middle}
+.ponto.on{background:#3FCB7E;border-color:#3FCB7E;box-shadow:0 0 0 2px rgba(63,203,126,.25)}
+.fila li.atual .ponto:not(.on){border-color:#D7E6FA}
 .backups{border-top:2px solid var(--borda)}
 .backups summary{cursor:pointer;padding:12px 14px;font:700 18px/1.2 var(--cond)}
 .backups small{color:var(--tinta2);font-weight:400}
@@ -339,6 +343,9 @@ let estado = null, eu = null, soVaga = false, eraMinhaVez = false, escolhaPenden
 let token = localStorage.getItem('tok');
 let admTok = sessionStorage.getItem('adm'), admDados = null, aba = 'andamento';
 let admBackups = [], backupsAbertos = false; // backups automáticos (aba Andamento)
+let online = new Set(); // ids dos militares com o site aberto (só o admin recebe)
+// ponto verde (online) ou vazado (fora) ao lado do nome — só para o admin
+const pontoOnline = id => admTok ? (online.has(id) ? '<i class="ponto on" title="Com o site aberto agora"></i>' : '<i class="ponto" title="Não está com o site aberto"></i>') : '';
 let modoLogin = 'user';
 let difRelogio = 0; // diferença entre o relógio deste aparelho e o do servidor
 
@@ -424,7 +431,7 @@ function render() {
         ? `<button class="op escolher" data-local="${l.id}"><b>${i + 1}ª</b> ${esc(l.om)} <span>(${esc(l.cidade)}) · ${l.restantes} livre${l.restantes > 1 ? 's' : ''}</span></button>`
         : `<span class="op cheia"><b>${i + 1}ª</b> ${esc(l.om)} <span>(${esc(l.cidade)}) · cheia</span></span>`;
     }).join('');
-    area.innerHTML = `<div class="meu vez adm-vez"><div class="status"><b>Modo administrador: escolhendo por ${esc(estado.atual.nome)}</b>Toque em "Escolher" na OM desejada. Após confirmar, a vez passa para ${esc(estado.proximo?.nome || 'o próximo')} e você continua escolhendo pelo seguinte.${estado.pausado ? ' As escolhas estão pausadas para os militares, mas o administrador pode escolher.' : ''}${pv?.esgotadas ? ' As OMs da lista de preferências dele já foram preenchidas.' : ''}</div>${porPref}<button class="btn" id="sairAdmHome">Sair do modo admin</button>
+    area.innerHTML = `<div class="meu vez adm-vez"><div class="status"><b>Modo administrador: escolhendo por ${esc(estado.atual.nome)}</b><span class="online-txt">${pontoOnline(estado.atual.id)}${online.has(estado.atual.id) ? 'Está com o site aberto agora.' : 'Não está com o site aberto.'}</span>Toque em "Escolher" na OM desejada. Após confirmar, a vez passa para ${esc(estado.proximo?.nome || 'o próximo')} e você continua escolhendo pelo seguinte.${estado.pausado ? ' As escolhas estão pausadas para os militares, mas o administrador pode escolher.' : ''}${pv?.esgotadas ? ' As OMs da lista de preferências dele já foram preenchidas.' : ''}</div>${porPref}<button class="btn" id="sairAdmHome">Sair do modo admin</button>
       ${lista ? `<div class="prefs-adm"><small>Preferências de ${esc(estado.atual.nome)} (planilha):</small>${lista}</div>` : ''}</div>`;
   }
   else if (!eu) area.innerHTML = '';
@@ -500,7 +507,7 @@ function render() {
   $('#fila').innerHTML = estado.classificacao.map(c => {
     const k = [c.localId ? 'ja' : '', estado.atual?.id === c.id ? 'atual' : '', estado.proximo?.id === c.id ? 'prox' : '', eu?.id === c.id ? 'voce' : ''].join(' ');
     const s = c.localId ? (c.fixo ? 'Vaga fixa: ' : '') + omDe(c.localId) : estado.atual?.id === c.id ? 'Escolhendo agora' : estado.proximo?.id === c.id ? 'Próximo' : 'Aguardando';
-    return `<li class="${k}"><span class="n">${c.pos}º</span><span class="q">${esc(c.nome)}</span><span class="s">${esc(s)}</span></li>`;
+    return `<li class="${k}"><span class="n">${c.pos}º</span><span class="q">${c.localId ? '' : pontoOnline(c.id)}${esc(c.nome)}</span><span class="s">${esc(s)}</span></li>`;
   }).join('') || '<li><span></span><span class="s">Nenhum militar cadastrado.</span></li>';
   cronometro();
 }
@@ -565,13 +572,30 @@ $('#fLogin').addEventListener('submit', async e => {
       $('#mLogin').hidden = true; mostrarAdmin();
     } else {
       const r = await api('POST', '/api/login', { senha });
-      token = r.token; eu = r.usuario; localStorage.setItem('tok', token);
+      token = r.token; eu = r.usuario; localStorage.setItem('tok', token); avisarPresenca();
       $('#mLogin').hidden = true; eraMinhaVez = false; render();
     }
   } catch (err) { $('#lErro').textContent = err.message; $('#lSenha').value = ''; $('#lSenha').focus(); }
 });
 function sairAdm() { admTok = null; sessionStorage.removeItem('adm'); render(); }
-function sair() { eu = null; token = null; localStorage.removeItem('tok'); render(); }
+function sair() {
+  if (token) api('POST', '/api/presenca/sair', {}, token).catch(() => {});
+  eu = null; token = null; localStorage.removeItem('tok'); render();
+}
+
+// presença: o militar logado avisa a cada 15 s (e ao voltar para a aba) que está com o site aberto
+function avisarPresenca() { if (eu && token) api('POST', '/api/presenca', {}, token).catch(() => {}); }
+setInterval(avisarPresenca, 15000);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') avisarPresenca(); });
+// o admin atualiza a lista de quem está online a cada 10 s
+setInterval(async () => {
+  if (!admTok) return;
+  try {
+    const ids = await api('GET', '/api/admin/online', null, admTok);
+    if (ids.length === online.size && ids.every(id => online.has(id))) return;
+    online = new Set(ids); render(); renderAdmin();
+  } catch {}
+}, 10000);
 
 // ------------------------------------------------ escolha
 document.addEventListener('click', e => {
@@ -623,6 +647,7 @@ function mostrarPrefs() {
 async function carregarAdmin() {
   try {
     [admDados, admBackups] = await Promise.all([api('GET', '/api/admin/dados', null, admTok), api('GET', '/api/admin/backups', null, admTok)]);
+    online = new Set(admDados.online || []);
     renderAdmin(); if (modoAdm()) render();
   }
   catch (err) {
@@ -653,7 +678,7 @@ function renderAdmin() {
         <button class="btn btn-pri">${d.aberturaProgramada ? 'Alterar' : 'Programar abertura'}</button>
         ${d.aberturaProgramada ? `<button type="button" class="btn btn-perigo" data-a="cancelarAgenda">Cancelar programação</button>
           <span>Programada para <b>${quandoTxt(d.aberturaProgramada)}</b> · <span class="falta-abrir"></span></span>` : '<span style="color:var(--tinta2)">Hora do seu aparelho. O servidor abre sozinho, mesmo com o site fechado.</span>'}</form>` : ''}
-      <div class="bloco"><div>Escolhendo agora: <b>${esc(d.atual?.nome || '—')}</b><span class="cron"></span> &nbsp; Próximo: <b>${esc(d.proximo?.nome || '—')}</b><br>
+      <div class="bloco"><div>Escolhendo agora: ${d.atual ? pontoOnline(d.atual.id) : ''}<b>${esc(d.atual?.nome || '—')}</b><span class="cron"></span> &nbsp; Próximo: ${d.proximo ? pontoOnline(d.proximo.id) : ''}<b>${esc(d.proximo?.nome || '—')}</b> &nbsp; <span style="color:var(--tinta2)">Online agora: <b>${online.size}</b></span><br>
         Vagas restantes: <b>${d.totalRestante}</b> &nbsp; Militares sem OM: <b>${d.classificacao.filter(c => !c.localId).length}</b> &nbsp; Vagas fixas: <b>${d.classificacao.filter(c => c.fixo).length}</b></div></div>
       <div class="bloco"><button class="btn" data-a="desfazer">Desfazer última escolha</button>
         <button class="btn btn-perigo" data-a="reset" title="As vagas fixas são mantidas">Resetar todas as escolhas</button>
@@ -685,7 +710,7 @@ function renderAdmin() {
         <td><input class="posin" type="number" min="1" max="${d.usuarios.length}" value="${i + 1}" data-pos="${u.id}"></td>
         <td><button class="btn btn-sm" data-sobe="${u.id}" ${i === 0 ? 'disabled' : ''} aria-label="Subir">▲</button>
             <button class="btn btn-sm" data-desce="${u.id}" ${i === d.usuarios.length - 1 ? 'disabled' : ''} aria-label="Descer">▼</button></td>
-        <td>${esc(u.nome)} <button class="btn btn-sm" data-renomear="${u.id}">Editar</button></td>
+        <td>${pontoOnline(u.id)}${esc(u.nome)} <button class="btn btn-sm" data-renomear="${u.id}">Editar</button></td>
         <td><span class="senha">${esc(u.senha)}</span> <button class="btn btn-sm" data-senha="${u.id}">Alterar</button></td>
         <td>${fixoDe(u.id) ? '🔒 ' : ''}${esc(omDe(alocDe(u.id)))}</td>
         <td><button class="btn btn-sm btn-perigo" data-apagar-u="${u.id}">Excluir</button></td></tr>`).join('') || '<tr><td colspan="6">Cadastre o primeiro militar acima.</td></tr>'}
@@ -925,7 +950,7 @@ $('#admin').addEventListener('submit', async e => {
 
 // ------------------------------------------------ início
 (async () => {
-  if (token) { try { eu = await api('GET', '/api/eu', null, token); } catch { sair(); } }
+  if (token) { try { eu = await api('GET', '/api/eu', null, token); avisarPresenca(); } catch { sair(); } }
   conectar();
   if (location.hash === '#admin') admTok ? mostrarAdmin() : abrirLogin('admin');
   if (location.hash === '#preferencias') mostrarPrefs();

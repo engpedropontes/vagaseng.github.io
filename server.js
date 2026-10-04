@@ -238,6 +238,12 @@ function mudou() { alocacaoAutomatica(); marcarVez(); verificarBackup(); salvar(
 
 // ---------------------------------------------------------------- sessões
 const sessoes = new Map(); // token -> { tipo: 'user'|'admin', id }
+
+// Presença: o militar logado avisa a cada 15 s que está com o site aberto.
+// Online = avisou nos últimos 40 s. Só o admin vê (GET /api/admin/online).
+const presenca = new Map(); // id do militar -> último aviso (ms)
+const ONLINE_MS = 40000;
+const onlineAgora = () => [...presenca].filter(([, t]) => Date.now() - t < ONLINE_MS).map(([id]) => id);
 function criarSessao(tipo, id) {
   const t = crypto.randomBytes(24).toString('hex');
   sessoes.set(t, { tipo, id });
@@ -402,6 +408,12 @@ async function rotear(req, res) {
     return json(res, 200, { token: criarSessao('user', u.id), usuario: { id: u.id, nome: u.nome } });
   }
 
+  if (rota === 'POST /api/presenca' || rota === 'POST /api/presenca/sair') {
+    if (sessao?.tipo !== 'user' || !db.usuarios.some(u => u.id === sessao.id)) return erro(res, 401, 'Sessão expirada');
+    if (rota.endsWith('/sair')) presenca.delete(sessao.id); else presenca.set(sessao.id, Date.now());
+    return json(res, 200, { ok: true });
+  }
+
   if (rota === 'GET /api/eu') {
     if (sessao?.tipo !== 'user' || !db.usuarios.some(u => u.id === sessao.id)) return erro(res, 401, 'Sessão expirada');
     const u = db.usuarios.find(x => x.id === sessao.id);
@@ -435,7 +447,8 @@ async function rotear(req, res) {
   const partes = url.pathname.split('/'); // ['', 'api', 'admin', recurso, id]
   const recurso = partes[3], id = partes[4];
 
-  if (rota === 'GET /api/admin/dados') return json(res, 200, { ...comPreferencias(estadoPublico()), usuarios: db.usuarios, planilha: db.planilha });
+  if (rota === 'GET /api/admin/dados') return json(res, 200, { ...comPreferencias(estadoPublico()), usuarios: db.usuarios, planilha: db.planilha, online: onlineAgora() });
+  if (rota === 'GET /api/admin/online') return json(res, 200, onlineAgora());
 
   if (rota === 'POST /api/admin/usuarios') {
     const nome = String(corpo.nome || '').trim().toUpperCase();
