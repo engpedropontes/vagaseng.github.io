@@ -124,11 +124,10 @@ body.celular .cidade-card{display:block;position:relative;background:var(--papel
 body.celular .cidade-card[hidden]{display:none}
 .cidade-card h3{margin:0 28px 6px 0;font:700 18px/1.1 var(--cond)}
 .cidade-card .fechar{position:absolute;top:4px;right:6px;background:none;border:0;color:var(--tinta2);font:700 22px/1 var(--corpo);padding:4px 8px}
-/* lista de OMs por região, embaixo do mapa */
+/* lista de OMs (mesma ordem do quadro), embaixo do mapa */
 body.celular .lista{display:block;margin-top:12px}
 .lista .dica{margin:0 0 8px;font-size:13px;color:var(--tinta2)}
 .lista .dica i{display:inline-block;width:10px;height:10px;border-radius:50%;margin:0 4px -1px 8px}
-.lista h2{font:700 17px/1 var(--cond);margin:14px 0 6px;color:var(--tinta2);letter-spacing:.06em;text-transform:uppercase}
 .item-om{border:1px solid var(--borda);background:var(--papel);padding:7px 10px;margin-bottom:6px}
 .item-om .l1{display:flex;justify-content:space-between;gap:8px;font:600 16px/1.2 var(--cond)}
 .item-om .l1 span{color:var(--livre);white-space:nowrap}
@@ -198,24 +197,14 @@ function verModo() {
   if (c !== celular) { celular = c; document.body.classList.toggle('celular', c); document.documentElement.classList.toggle('celular', c); if (!c) fecharCidade(); }
 }
 verModo();
-const REGIAO = { AC: 'Norte', AM: 'Norte', AP: 'Norte', PA: 'Norte', RO: 'Norte', RR: 'Norte', TO: 'Norte',
-  AL: 'Nordeste', BA: 'Nordeste', CE: 'Nordeste', MA: 'Nordeste', PB: 'Nordeste', PE: 'Nordeste', PI: 'Nordeste', RN: 'Nordeste', SE: 'Nordeste',
-  DF: 'Centro-Oeste', GO: 'Centro-Oeste', MS: 'Centro-Oeste', MT: 'Centro-Oeste',
-  ES: 'Sudeste', MG: 'Sudeste', RJ: 'Sudeste', SP: 'Sudeste', PR: 'Sul', RS: 'Sul', SC: 'Sul' };
-const ufDe = cidade => (String(cidade || '').trim().match(/[-/,\s]\s*([A-Za-z]{2})$/)?.[1] || '').toUpperCase();
 const itemOm = l => `<div class="item-om${l.restantes ? '' : ' cheio'}"><div class="l1"><b>${esc(l.om)}</b><span>${l.restantes ? `${l.restantes} livre${l.restantes > 1 ? 's' : ''}` : 'completa'} · ${l.vagas - l.restantes}/${l.vagas}</span></div>
   <div class="cid">${esc(l.cidade)}</div>${l.ocupantes.map(n => `<div class="quem">${esc(n)}</div>`).join('')}</div>`;
 
-// lista de OMs agrupada por região (celular)
+// lista de OMs na ordem do quadro de escolha (celular)
 function desenharLista() {
   if (!celular || !estado) return;
-  const ordem = ['Norte', 'Nordeste', 'Centro-Oeste', 'Sudeste', 'Sul', 'Outras'], grupos = {};
-  for (const l of estado.locais) {
-    if (l.vagas === 0) continue;
-    (grupos[REGIAO[ufDe(l.cidade)] || 'Outras'] ||= []).push(l);
-  }
   $('#lista').innerHTML = `<p class="dica">Toque num pino do mapa para ver a cidade.<i style="background:var(--livre)"></i>com vaga<i style="background:var(--cheio)"></i>completa</p>`
-    + ordem.filter(r => grupos[r]).map(r => `<h2>${r}</h2>` + grupos[r].map(itemOm).join('')).join('')
+    + estado.locais.filter(l => l.vagas > 0).map(itemOm).join('') // mesma ordem do quadro de escolha
     + '<div class="fonte-lista">Malha: IBGE · Municípios: IBGE (lista kelvins/municipios-brasileiros)</div>';
 }
 
