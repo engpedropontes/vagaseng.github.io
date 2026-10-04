@@ -366,6 +366,14 @@ const modoAdm = () => !!(admTok && estado?.atual && !minhaVez());
 const minhaVez = () => !!(eu && estado && !estado.pausado && estado.atual?.id === eu.id);
 
 // "4º BEC (Barreiras-BA)" para um id de OM
+// abertura programada: "dom., 05/10 às 08:00" e "faltam 1h 20min"
+const quandoTxt = ms => { const d = new Date(ms); return `${d.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' })} às ${d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`; };
+function faltaTxt(ms) {
+  const seg = Math.floor((ms - (Date.now() - difRelogio)) / 1000);
+  if (seg <= 0) return 'abrindo…';
+  const d = Math.floor(seg / 86400), h = Math.floor(seg / 3600) % 24, m = Math.floor(seg / 60) % 60, s = seg % 60;
+  return 'faltam ' + (d ? `${d}d ${h}h` : h ? `${h}h ${String(m).padStart(2, '0')}min` : `${m} min ${String(s).padStart(2, '0')} s`);
+}
 const nomeOm = id => { const l = estado.locais.find(x => x.id === id); return l ? `${l.om} (${l.cidade})` : ''; };
 
 function render() {
@@ -381,7 +389,9 @@ function render() {
   // faixa
   const fim = !estado.atual;
   let aviso = '';
-  if (estado.pausado && !fim) aviso = '<div class="aviso">Escolhas pausadas pela administração. A ordem abaixo continua valendo.</div>';
+  if (estado.pausado && !fim) aviso = estado.aberturaProgramada
+    ? `<div class="aviso">Escolhas pausadas. Abertura programada para <b>${quandoTxt(estado.aberturaProgramada)}</b> · <span class="falta-abrir"></span></div>`
+    : '<div class="aviso">Escolhas pausadas pela administração. A ordem abaixo continua valendo.</div>';
   if (fim) aviso = `<div class="aviso">Escolha concluída: todos os militares foram alocados.</div>`;
   $('#faixa').innerHTML = `
     <div class="agora"><small>Escolhendo agora<span class="cron"></span></small><strong>${esc(estado.atual?.nome || '—')}</strong></div>
@@ -393,7 +403,7 @@ function render() {
   const mini = $('#faixaMini');
   mini.className = 'faixa-mini' + (mini.classList.contains('on') ? ' on' : '') + (minhaVez() ? ' vez' : estado.pausado || fim ? ' pausa' : '');
   mini.innerHTML = fim ? '<b>Escolha concluída</b>'
-    : `<span>${minhaVez() ? 'SUA VEZ' : 'Escolhendo agora'}${estado.pausado ? ' (pausado)' : ''}</span><b>${esc(estado.atual?.nome || '—')}</b><span class="cron"></span>`
+    : `<span>${minhaVez() ? 'SUA VEZ' : 'Escolhendo agora'}${estado.pausado ? (estado.aberturaProgramada ? ` (abre ${quandoTxt(estado.aberturaProgramada)})` : ' (pausado)') : ''}</span><b>${esc(estado.atual?.nome || '—')}</b><span class="cron"></span>`
       + (estado.proximo ? `<span class="prox">Próximo: ${esc(estado.proximo.nome)}</span>` : '');
 
   // área pessoal
@@ -430,7 +440,7 @@ function render() {
       cls = 'vez';
       status = `<b>Sua vez agora</b>Toque em "Escolher" na OM desejada. Restam ${estado.totalRestante} vagas em ${abertas.length} OM.`;
     } else if (estado.pausado) {
-      status = `<b>Aguardando abertura</b>${aFrente} militar(es) escolhem antes de você.`;
+      status = `<b>Aguardando abertura</b>${estado.aberturaProgramada ? `Abertura programada para ${quandoTxt(estado.aberturaProgramada)} (<span class="falta-abrir"></span>). ` : ''}${aFrente} militar(es) escolhem antes de você.`;
     } else {
       status = `<b>Aguardando sua vez</b>${aFrente} militar(es) à sua frente. A escolha abre sozinha quando chegar sua vez. Restam ${estado.totalRestante} vagas em ${abertas.length} OM.`;
     }
@@ -500,6 +510,8 @@ function cronometro() {
     txt = ' · há ' + (h ? `${h}h${String(m).padStart(2, '0')}` : `${m}:${s}`);
   }
   document.querySelectorAll('.cron').forEach(el => el.textContent = txt);
+  const prog = estado?.aberturaProgramada;
+  document.querySelectorAll('.falta-abrir').forEach(el => el.textContent = prog ? faltaTxt(prog) : '');
 }
 setInterval(cronometro, 1000);
 
@@ -629,6 +641,11 @@ function renderAdmin() {
       <div class="bloco"><span class="estado-proc">${d.pausado ? 'Escolhas pausadas' : 'Escolhas abertas'}</span>
         <button class="btn btn-pri" data-a="pausa">${d.pausado ? 'Abrir escolhas' : 'Pausar escolhas'}</button>
         ${d.atual ? `<button class="btn btn-cta" id="irEscolher">Escolher por ${esc(d.atual.nome)}</button>` : ''}</div>
+      ${d.pausado && d.atual ? `<form class="form" id="fAgenda"><label>Abrir as escolhas automaticamente em
+          <input type="datetime-local" name="quando" required value="${d.aberturaProgramada ? paraCampo(d.aberturaProgramada) : ''}"></label>
+        <button class="btn btn-pri">${d.aberturaProgramada ? 'Alterar' : 'Programar abertura'}</button>
+        ${d.aberturaProgramada ? `<button type="button" class="btn btn-perigo" data-a="cancelarAgenda">Cancelar programação</button>
+          <span>Programada para <b>${quandoTxt(d.aberturaProgramada)}</b> · <span class="falta-abrir"></span></span>` : '<span style="color:var(--tinta2)">Hora do seu aparelho. O servidor abre sozinho, mesmo com o site fechado.</span>'}</form>` : ''}
       <div class="bloco"><div>Escolhendo agora: <b>${esc(d.atual?.nome || '—')}</b><span class="cron"></span> &nbsp; Próximo: <b>${esc(d.proximo?.nome || '—')}</b><br>
         Vagas restantes: <b>${d.totalRestante}</b> &nbsp; Militares sem OM: <b>${d.classificacao.filter(c => !c.localId).length}</b> &nbsp; Vagas fixas: <b>${d.classificacao.filter(c => c.fixo).length}</b></div></div>
       <div class="bloco"><button class="btn" data-a="desfazer">Desfazer última escolha</button>
@@ -796,6 +813,9 @@ async function carregarPrefs() {
   } catch (err) { $('#prefs').innerHTML = `<div class="painel"><div class="bloco">${esc(err.message)}</div></div>`; }
 }
 
+// instante (ms) -> valor do campo datetime-local, na hora do aparelho
+function paraCampo(ms) { const d = new Date(ms); return new Date(ms - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16); }
+
 function moverPara(id, novaPos) {
   const ids = admDados.usuarios.map(u => u.id).filter(x => x !== id);
   ids.splice(Math.max(0, Math.min(ids.length, novaPos - 1)), 0, id);
@@ -824,6 +844,7 @@ $('#admin').addEventListener('click', async e => {
   if (ds.senha) { const s = prompt('Nova senha (4 dígitos, nenhum dígito repetido mais de 2 vezes):'); if (s) await adm('PUT', '/api/admin/usuarios/' + ds.senha, { senha: s }); }
   if (ds.apagarU && confirm('Excluir este militar e sua escolha?')) await adm('DELETE', '/api/admin/usuarios/' + ds.apagarU);
   if (ds.a === 'imprimir') imprimir();
+  if (ds.a === 'cancelarAgenda' && confirm('Cancelar a abertura programada? As escolhas continuam pausadas.')) await adm('POST', '/api/admin/agendar', { quando: null });
   if (ds.desfazerU) {
     const h = d.historico.find(x => x.usuarioId === ds.desfazerU);
     if (h && confirm(`Desfazer a escolha de ${h.nome} (${h.local})?\n\nEle volta para a fila na posição dele da classificação e as escolhas serão pausadas.`))
@@ -860,6 +881,11 @@ $('#admin').addEventListener('submit', async e => {
     alert(`Militar cadastrado. Senha: ${r.senha}`);
   }
   if (e.target.id === 'fLocal') await adm('POST', '/api/admin/locais', f);
+  if (e.target.id === 'fAgenda') {
+    const ms = new Date(f.quando).getTime(); // data/hora local do aparelho do admin
+    if (!Number.isFinite(ms)) return alert('Informe data e hora.');
+    await adm('POST', '/api/admin/agendar', { quando: ms });
+  }
   if (e.target.id === 'fPlanilha') {
     const b = e.target.querySelector('.btn-pri'); b.disabled = true; b.textContent = 'Sincronizando…';
     try { await adm('POST', '/api/admin/planilha', { url: f.url }); } finally { carregarAdmin(); }

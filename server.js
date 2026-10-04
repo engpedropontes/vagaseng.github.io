@@ -42,6 +42,7 @@ function carregar() {
     db.vinculos = db.vinculos || []; // bancos antigos não tinham vagas fixas
     db.preferencias = db.preferencias || {};
     db.planilha = db.planilha || null;
+    db.aberturaProgramada = db.aberturaProgramada || null;
     marcarVez();
   } catch {
     db = seed();
@@ -141,6 +142,7 @@ function estadoPublico() {
   const nome = id => db.usuarios.find(u => u.id === id)?.nome || '?';
   return {
     pausado: db.pausado,
+    aberturaProgramada: db.pausado ? db.aberturaProgramada || null : null,
     vezDesde: db.vez?.desde || null,
     agora: Date.now(),
     locais: db.locais.map(l => ({
@@ -488,7 +490,23 @@ async function rotear(req, res) {
     return json(res, 200, { ok: true, planilha: db.planilha });
   }
 
-  if (rota === 'POST /api/admin/pausa') { db.pausado = !!corpo.pausado; mudou(); return json(res, 200, { ok: true }); }
+  if (rota === 'POST /api/admin/pausa') {
+    db.pausado = !!corpo.pausado;
+    if (!db.pausado) db.aberturaProgramada = null; // abriu na mão: a programação perde o sentido
+    mudou(); return json(res, 200, { ok: true });
+  }
+
+  // Programa (ou cancela, com quando = null) a abertura automática das escolhas.
+  // "quando" é o instante em milissegundos; o navegador do admin converte a data/hora local dele.
+  if (rota === 'POST /api/admin/agendar') {
+    if (corpo.quando === null) { db.aberturaProgramada = null; mudou(); return json(res, 200, { ok: true }); }
+    const quando = Number(corpo.quando);
+    if (!Number.isFinite(quando)) return erro(res, 400, 'Data e hora inválidas.');
+    if (quando <= Date.now()) return erro(res, 400, 'Escolha uma data e hora no futuro.');
+    if (!db.pausado) return erro(res, 409, 'As escolhas já estão abertas.');
+    db.aberturaProgramada = quando;
+    mudou(); return json(res, 200, { ok: true });
+  }
 
   // Desfaz a escolha de um militar qualquer (não só a última). Ele volta para a fila
   // na sua posição da classificação; as escolhas são pausadas para o admin conferir.
@@ -520,7 +538,7 @@ async function rotear(req, res) {
   if (rota === 'POST /api/admin/restaurar') {
     const d = corpo;
     if (!Array.isArray(d.locais) || !Array.isArray(d.usuarios) || !Array.isArray(d.alocacoes)) return erro(res, 400, 'Arquivo de backup inválido.');
-    db = { locais: d.locais, usuarios: d.usuarios, alocacoes: d.alocacoes, vinculos: Array.isArray(d.vinculos) ? d.vinculos : [], pausado: true,
+    db = { locais: d.locais, usuarios: d.usuarios, alocacoes: d.alocacoes, vinculos: Array.isArray(d.vinculos) ? d.vinculos : [], pausado: true, aberturaProgramada: null,
       preferencias: d.preferencias && typeof d.preferencias === 'object' ? d.preferencias : {}, planilha: d.planilha || null };
     mudou(); return json(res, 200, { ok: true });
   }
@@ -530,6 +548,16 @@ async function rotear(req, res) {
 
 carregar();
 sincronizarPlanilha();
+
+// Abertura programada: confere a cada segundo. Se o servidor estava fora do ar na hora
+// marcada, abre assim que voltar.
+setInterval(() => {
+  if (db.aberturaProgramada && Date.now() >= db.aberturaProgramada) {
+    db.aberturaProgramada = null;
+    if (db.pausado) { db.pausado = false; console.log('Escolhas abertas automaticamente (abertura programada).'); }
+    mudou();
+  }
+}, 1000);
 http.createServer((req, res) => {
   rotear(req, res).catch(e => { console.error(e); if (!res.headersSent) erro(res, 400, e.message); });
 }).listen(PORT, () => console.log(`Escolha de OM rodando em http://localhost:${PORT}`));

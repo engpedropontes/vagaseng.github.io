@@ -186,6 +186,14 @@ function localizar(cidade) {
   const so = porNome.get(norm(m ? m[1] : cidade)); // sem UF (ou UF errada): só se o nome for único no país
   return so && so.length === 1 ? so[0] : null;
 }
+// abertura programada: "dom., 05/10 às 08:00" e "faltam 1h 20min"
+const quandoTxt = ms => { const d = new Date(ms); return `${d.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' })} às ${d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`; };
+function faltaTxt(ms) {
+  const seg = Math.floor((ms - (Date.now() - difRelogio)) / 1000);
+  if (seg <= 0) return 'abrindo…';
+  const d = Math.floor(seg / 86400), h = Math.floor(seg / 3600) % 24, m = Math.floor(seg / 60) % 60, s = seg % 60;
+  return 'faltam ' + (d ? `${d}d ${h}h` : h ? `${h}h ${String(m).padStart(2, '0')}min` : `${m} min ${String(s).padStart(2, '0')} s`);
+}
 const chave = c => { const r = localizar(c); return r ? r.join(',') : null; };
 
 let estado = null, difRelogio = 0, ultimoHist = null, novaCidade = null, timerNovo = null;
@@ -365,8 +373,10 @@ function render() {
   $('#agoraNome').textContent = estado.atual?.nome || '—';
   $('#agoraPos').textContent = estado.atual ? `${pos(estado.atual.id)}º da classificação` : '';
   $('#proxNome').textContent = estado.proximo?.nome || '—';
-  $('#aviso').textContent = !estado.atual ? 'Escolha concluída: todos os militares foram alocados.'
-    : estado.pausado ? 'Escolhas pausadas pela administração.' : '';
+  $('#aviso').innerHTML = !estado.atual ? 'Escolha concluída: todos os militares foram alocados.'
+    : estado.pausado ? (estado.aberturaProgramada
+      ? `Abertura das escolhas: ${quandoTxt(estado.aberturaProgramada)} · <span class="falta-abrir"></span>`
+      : 'Escolhas pausadas pela administração.') : '';
   const h = estado.historico.slice(-6).reverse();
   $('#ultimas').innerHTML = h.map(x => `<li>${esc(x.nome)}<span>${esc(x.local)}${x.auto ? ' · automática' : ''}</span></li>`).join('')
     || '<li class="vazio">Nenhuma escolha ainda.</li>';
@@ -397,6 +407,7 @@ function relogios() {
     txt = 'há ' + (h ? `${h}h${String(m).padStart(2, '0')}` : `${m}:${s}`);
   }
   $('#cron').textContent = txt;
+  document.querySelectorAll('.falta-abrir').forEach(el => el.textContent = estado?.aberturaProgramada ? faltaTxt(estado.aberturaProgramada) : '');
 }
 setInterval(relogios, 1000);
 

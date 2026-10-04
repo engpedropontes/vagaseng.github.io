@@ -70,6 +70,10 @@ primeira opção dele que ainda tiver vaga.
   o servidor valida isso em cada requisição, então não há conflito de concorrência.
 - Quando só resta **uma OM com vaga**, os militares restantes são alocados nela
   automaticamente.
+- **Abertura programada:** com as escolhas pausadas, o admin pode marcar data e hora
+  (Administração > Andamento) para o servidor abrir as escolhas sozinho. Todos veem
+  a contagem regressiva no site e no telão. Abrir na mão cancela a programação; se o
+  servidor estiver fora do ar na hora marcada, abre assim que voltar.
 - "Desfazer última escolha" e "Resetar" pausam o processo, para a administração
   conferir antes de reabrir.
 - Senhas dos militares: 4 dígitos, nenhum dígito repetido mais de 2 vezes
