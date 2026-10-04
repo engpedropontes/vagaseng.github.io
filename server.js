@@ -33,7 +33,7 @@ function seed() {
   for (const nome of JSON.parse(fs.readFileSync(path.join(__dirname, 'seed-militares.json'), 'utf8'))) {
     usuarios.push({ id: novoId(), nome, senha: gerarSenha(usuarios) });
   }
-  return { locais, usuarios, alocacoes: [], vinculos: [], pausado: true, preferencias: {}, planilha: null };
+  return { locais, usuarios, alocacoes: [], vinculos: [], pausado: true, preferencias: {}, planilha: null, preSelecoes: {} };
 }
 
 function carregar() {
@@ -43,6 +43,7 @@ function carregar() {
     db.preferencias = db.preferencias || {};
     db.planilha = db.planilha || null;
     db.aberturaProgramada = db.aberturaProgramada || null;
+    db.preSelecoes = db.preSelecoes || {};
     if (db.backupMarco === undefined) db.backupMarco = Math.floor(db.alocacoes.length / A_CADA) * A_CADA;
     marcarVez();
   } catch {
@@ -118,7 +119,8 @@ function restaurarDados(d) {
   if (!d || !Array.isArray(d.locais) || !Array.isArray(d.usuarios) || !Array.isArray(d.alocacoes)) return 'Arquivo de backup inválido.';
   db = { locais: d.locais, usuarios: d.usuarios, alocacoes: d.alocacoes, vinculos: Array.isArray(d.vinculos) ? d.vinculos : [], pausado: true, aberturaProgramada: null,
     preferencias: d.preferencias && typeof d.preferencias === 'object' ? d.preferencias : {}, planilha: d.planilha || null,
-    backupMarco: Math.floor(d.alocacoes.length / A_CADA) * A_CADA, backupFinal: !!d.backupFinal };
+    backupMarco: Math.floor(d.alocacoes.length / A_CADA) * A_CADA, backupFinal: !!d.backupFinal,
+    preSelecoes: d.preSelecoes && typeof d.preSelecoes === 'object' ? d.preSelecoes : {} };
   return null;
 }
 
@@ -152,6 +154,24 @@ const totalRestante = () => db.locais.reduce((s, l) => s + restantes(l), 0);
 
 // Quando só resta um local com vaga, não há escolha a fazer:
 // os próximos da fila são alocados automaticamente nele.
+// Pré-seleção: o admin deixa marcada a OM de um militar (db.preSelecoes[id] = localId).
+// Quando chega a vez dele, com as escolhas abertas, e a OM ainda tem vaga, a escolha é
+// feita sozinha. Sem vaga, nada acontece: a vez fica com o militar, que escolhe normalmente.
+function aplicarPreSelecoes() {
+  for (const id of Object.keys(db.preSelecoes)) // limpa quem já tem OM ou foi excluído
+    if (alocacaoDe(id) || !db.usuarios.some(u => u.id === id)) delete db.preSelecoes[id];
+  let aplicou = false;
+  while (!db.pausado) {
+    const atual = pendentes()[0];
+    const local = atual && db.locais.find(l => l.id === db.preSelecoes[atual.id]);
+    if (!local || restantes(local) <= 0) break;
+    db.alocacoes.push({ usuarioId: atual.id, localId: local.id, ts: Date.now(), admin: true, pre: true });
+    delete db.preSelecoes[atual.id];
+    aplicou = true;
+  }
+  return aplicou;
+}
+
 function alocacaoAutomatica() {
   let mudou = false;
   while (!db.pausado) {
@@ -221,7 +241,7 @@ function estadoPublico() {
     proximo: fila[1] ? { id: fila[1].id, nome: fila[1].nome } : null,
     totalRestante: totalRestante(),
     historico: db.alocacoes.map(a => ({
-      usuarioId: a.usuarioId, nome: nome(a.usuarioId), local: db.locais.find(l => l.id === a.localId), ts: a.ts, auto: !!a.auto, admin: !!a.admin,
+      usuarioId: a.usuarioId, nome: nome(a.usuarioId), local: db.locais.find(l => l.id === a.localId), ts: a.ts, auto: !!a.auto, admin: !!a.admin, pre: !!a.pre,
     })).map(h => ({ ...h, local: h.local ? `${h.local.om} (${h.local.cidade})` : '?' })),
   };
 }
@@ -234,7 +254,11 @@ function transmitir() {
 }
 setInterval(() => { for (const res of clientes) res.write(': ping\n\n'); }, 25000);
 
-function mudou() { alocacaoAutomatica(); marcarVez(); verificarBackup(); salvar(); transmitir(); }
+function mudou() {
+  // pré-seleções e alocação automática podem se encadear (uma escolha libera a vez do próximo)
+  for (let mexeu = true; mexeu; ) { const a = aplicarPreSelecoes(); const b = alocacaoAutomatica(); mexeu = a || b; }
+  marcarVez(); verificarBackup(); salvar(); transmitir();
+}
 
 // ---------------------------------------------------------------- sessões
 const sessoes = new Map(); // token -> { tipo: 'user'|'admin', id }
@@ -447,7 +471,7 @@ async function rotear(req, res) {
   const partes = url.pathname.split('/'); // ['', 'api', 'admin', recurso, id]
   const recurso = partes[3], id = partes[4];
 
-  if (rota === 'GET /api/admin/dados') return json(res, 200, { ...comPreferencias(estadoPublico()), usuarios: db.usuarios, planilha: db.planilha, online: onlineAgora() });
+  if (rota === 'GET /api/admin/dados') return json(res, 200, { ...comPreferencias(estadoPublico()), usuarios: db.usuarios, planilha: db.planilha, online: onlineAgora(), preSelecoes: db.preSelecoes });
   if (rota === 'GET /api/admin/online') return json(res, 200, onlineAgora());
 
   if (rota === 'POST /api/admin/usuarios') {
@@ -516,6 +540,19 @@ async function rotear(req, res) {
   }
 
   // Amarrar / soltar um militar numa vaga fixa. localId vazio = soltar.
+  // Pré-seleção de um militar (localId vazio = remover)
+  if (rota === 'POST /api/admin/preselecao') {
+    const u = db.usuarios.find(x => x.id === corpo.usuarioId);
+    if (!u) return erro(res, 404, 'Militar não encontrado.');
+    if (!corpo.localId) { delete db.preSelecoes[u.id]; mudou(); return json(res, 200, { ok: true }); }
+    if (alocacaoDe(u.id)) return erro(res, 409, `${u.nome} já tem OM.`);
+    const local = db.locais.find(l => l.id === corpo.localId);
+    if (!local) return erro(res, 404, 'Local não encontrado.');
+    if (restantes(local) <= 0) return erro(res, 409, `${local.om} não tem vaga livre agora.`);
+    db.preSelecoes[u.id] = local.id;
+    mudou(); return json(res, 200, { ok: true, aplicada: !!alocacaoDe(u.id) });
+  }
+
   if (rota === 'POST /api/admin/vinculo') {
     const u = db.usuarios.find(x => x.id === corpo.usuarioId);
     if (!u) return erro(res, 404, 'Militar não encontrado.');
