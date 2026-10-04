@@ -133,6 +133,9 @@ a.btn-prefs{display:inline-block;text-decoration:none}
 .fila li.prox{background:var(--ambar-claro);box-shadow:inset 4px 0 var(--ambar)}
 .fila li.voce .q::after{content:" (você)";font-weight:400}
 .prefs td.ok{color:#8CC0FF}
+.backups{border-top:2px solid var(--borda)}
+.backups summary{cursor:pointer;padding:12px 14px;font:700 18px/1.2 var(--cond)}
+.backups small{color:var(--tinta2);font-weight:400}
 .desfazer-x{border:2px solid var(--perigo);background:transparent;color:var(--perigo);font:700 15px/1 var(--corpo);width:30px;height:30px;padding:0}
 .desfazer-x:hover{background:var(--perigo);color:#0A1628}
 .prefs-adm{flex-basis:100%;display:flex;flex-wrap:wrap;gap:8px;align-items:center;border-top:1px dashed var(--ambar);padding-top:10px}
@@ -335,6 +338,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt
 let estado = null, eu = null, soVaga = false, eraMinhaVez = false, escolhaPendente = null;
 let token = localStorage.getItem('tok');
 let admTok = sessionStorage.getItem('adm'), admDados = null, aba = 'andamento';
+let admBackups = [], backupsAbertos = false; // backups automáticos (aba Andamento)
 let modoLogin = 'user';
 let difRelogio = 0; // diferença entre o relógio deste aparelho e o do servidor
 
@@ -617,7 +621,10 @@ function mostrarPrefs() {
 }
 
 async function carregarAdmin() {
-  try { admDados = await api('GET', '/api/admin/dados', null, admTok); renderAdmin(); if (modoAdm()) render(); }
+  try {
+    [admDados, admBackups] = await Promise.all([api('GET', '/api/admin/dados', null, admTok), api('GET', '/api/admin/backups', null, admTok)]);
+    renderAdmin(); if (modoAdm()) render();
+  }
   catch (err) {
     if (err.status !== 401) return;
     const naTelaAdm = !$('#admin').hidden;
@@ -658,7 +665,15 @@ function renderAdmin() {
       <div class="rolagem"><table><thead><tr><th>#</th><th>Horário</th><th>Militar</th><th>OM</th><th>Tipo</th><th></th></tr></thead><tbody>
       ${d.historico.map((h, i) => `<tr><td>${i + 1}</td><td>${new Date(h.ts).toLocaleString('pt-BR')}</td><td>${esc(h.nome)}</td><td>${esc(h.local)}</td><td>${h.auto ? 'Automática' : h.admin ? 'Pelo admin' : 'Escolha'}</td>
         <td><button class="desfazer-x" data-desfazer-u="${h.usuarioId}" title="Desfazer a escolha de ${esc(h.nome)}" aria-label="Desfazer a escolha de ${esc(h.nome)}">✕</button></td></tr>`).reverse().join('') || '<tr><td colspan="6">Nenhuma escolha ainda.</td></tr>'}
-      </tbody></table></div></div>`;
+      </tbody></table></div>
+      <details class="backups" id="dBackups" ${backupsAbertos ? 'open' : ''}><summary>Backups automáticos (${admBackups.length}) — o servidor guarda uma cópia a cada mudança</summary>
+        <div class="rolagem"><table><thead><tr><th>Horário</th><th>O que aconteceu</th><th>Escolhas</th><th></th></tr></thead><tbody>
+        ${admBackups.map((b, i) => `<tr><td>${new Date(b.ts).toLocaleString('pt-BR')}</td><td>${esc(b.motivo)}${i === 0 ? ' <small>(estado atual)</small>' : ''}</td><td>${b.escolhas}</td>
+          <td>${i === 0 ? '' : `<button class="btn btn-sm" data-restaurar-b="${b.arquivo}">Restaurar</button> `}<button class="btn btn-sm" data-baixar-b="${b.arquivo}">Baixar</button></td></tr>`).join('')
+          || '<tr><td colspan="4">Nenhum backup ainda.</td></tr>'}
+        </tbody></table></div>
+        <div class="legenda">São mantidos os ${50} mais recentes, no volume do Railway. Restaurar pausa as escolhas e guarda antes uma cópia do estado atual, então nada se perde.</div>
+      </details></div>`;
   }
   if (aba === 'militares') {
     corpo = `<div class="painel">
@@ -832,6 +847,16 @@ $('#admin').addEventListener('click', async e => {
   if (ds.a === 'pausa') await adm('POST', '/api/admin/pausa', { pausado: !d.pausado });
   if (ds.a === 'desfazer' && confirm('Desfazer a última escolha? As escolhas serão pausadas.')) await adm('POST', '/api/admin/desfazer');
   if (ds.a === 'reset' && confirm('Apagar TODAS as escolhas feitas? Militares, OMs e vagas fixas são mantidos.') && confirm('Confirma mesmo o reset?')) await adm('POST', '/api/admin/reset');
+  if (ds.restaurarB) {
+    const b = admBackups.find(x => x.arquivo === ds.restaurarB);
+    if (b && confirm(`Restaurar o backup de ${new Date(b.ts).toLocaleString('pt-BR')}?\n(${b.motivo} · ${b.escolhas} escolhas)\n\nO estado atual também fica guardado nos backups. As escolhas serão pausadas.`))
+      await adm('POST', '/api/admin/backups/restaurar', { arquivo: ds.restaurarB });
+  }
+  if (ds.baixarB) {
+    const r = await fetch('/api/admin/backups/' + ds.baixarB, { headers: { Authorization: 'Bearer ' + admTok } });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(await r.blob());
+    a.download = 'escolha-om-' + ds.baixarB; a.click();
+  }
   if (ds.a === 'backup') {
     const r = await fetch('/api/admin/backup', { headers: { Authorization: 'Bearer ' + admTok } });
     const a = document.createElement('a'); a.href = URL.createObjectURL(await r.blob());
@@ -865,6 +890,7 @@ $('#admin').addEventListener('click', async e => {
   }
   if (ds.apagarL && confirm('Excluir esta OM?')) await adm('DELETE', '/api/admin/locais/' + ds.apagarL);
 });
+$('#admin').addEventListener('toggle', e => { if (e.target.id === 'dBackups') backupsAbertos = e.target.open; }, true);
 $('#admin').addEventListener('change', async e => {
   if (e.target.dataset.pos) await moverPara(e.target.dataset.pos, parseInt(e.target.value, 10));
   if (e.target.id === 'restaurar' && e.target.files[0]) {

@@ -59,6 +59,58 @@ function salvar() {
   fs.renameSync(tmp, DATA_FILE);
 }
 
+// ---------------------------------------------------------------- backups automáticos
+// A cada mudança (e ao ligar) guarda uma cópia do banco em backups/, ao lado do db.json
+// (no Railway, no volume), mantendo as MAX_BACKUPS mais recentes. Cópias iguais à
+// anterior são puladas. Cada arquivo guarda { motivo, ts, db }.
+const PASTA_BACKUPS = path.join(path.dirname(DATA_FILE), 'backups');
+const MAX_BACKUPS = 50;
+const NOME_BACKUP = /^db-\d{15}\.json$/;
+let indiceBackups = null, ultimoBackup = null; // índice em memória: [{ arquivo, motivo, ts, escolhas }], mais novo primeiro
+// para comparar com a cópia anterior, ignora horários da leitura da planilha (mudam a cada 5 min)
+const semHorarios = d => JSON.stringify({ ...d, planilha: d.planilha ? { url: d.planilha.url, avisos: d.planilha.avisos, total: d.planilha.total } : null });
+
+function lerIndiceBackups() {
+  if (indiceBackups) return indiceBackups;
+  indiceBackups = [];
+  try {
+    for (const arquivo of fs.readdirSync(PASTA_BACKUPS).filter(f => NOME_BACKUP.test(f)).sort().reverse()) {
+      try {
+        const b = JSON.parse(fs.readFileSync(path.join(PASTA_BACKUPS, arquivo), 'utf8'));
+        indiceBackups.push({ arquivo, motivo: b.motivo, ts: b.ts, escolhas: b.db?.alocacoes?.length ?? 0 });
+      } catch {}
+    }
+  } catch {}
+  // para não repetir, ao ligar, uma cópia igual à mais recente já guardada
+  if (indiceBackups[0]) try { ultimoBackup = semHorarios(JSON.parse(fs.readFileSync(path.join(PASTA_BACKUPS, indiceBackups[0].arquivo), 'utf8')).db); } catch {}
+  return indiceBackups;
+}
+
+function backup(motivo) {
+  try {
+    lerIndiceBackups();
+    const conteudo = semHorarios(db);
+    if (conteudo === ultimoBackup) return;
+    fs.mkdirSync(PASTA_BACKUPS, { recursive: true });
+    let ts = Date.now();
+    while (fs.existsSync(path.join(PASTA_BACKUPS, `db-${String(ts).padStart(15, '0')}.json`))) ts++;
+    const arquivo = `db-${String(ts).padStart(15, '0')}.json`;
+    fs.writeFileSync(path.join(PASTA_BACKUPS, arquivo), JSON.stringify({ motivo, ts, db }));
+    ultimoBackup = conteudo;
+    const indice = indiceBackups;
+    indice.unshift({ arquivo, motivo, ts, escolhas: db.alocacoes.length });
+    for (const velho of indice.splice(MAX_BACKUPS)) fs.rmSync(path.join(PASTA_BACKUPS, velho.arquivo), { force: true });
+  } catch (e) { console.error('Falha no backup automático:', e.message); }
+}
+
+// Substitui os dados atuais pelos de um backup; devolve uma mensagem de erro ou null.
+function restaurarDados(d) {
+  if (!d || !Array.isArray(d.locais) || !Array.isArray(d.usuarios) || !Array.isArray(d.alocacoes)) return 'Arquivo de backup inválido.';
+  db = { locais: d.locais, usuarios: d.usuarios, alocacoes: d.alocacoes, vinculos: Array.isArray(d.vinculos) ? d.vinculos : [], pausado: true, aberturaProgramada: null,
+    preferencias: d.preferencias && typeof d.preferencias === 'object' ? d.preferencias : {}, planilha: d.planilha || null };
+  return null;
+}
+
 function gerarSenha(lista = db.usuarios) {
   const usadas = new Set(lista.map(u => u.senha));
   if (usadas.size >= 9500) throw new Error('Sem senhas disponíveis');
@@ -171,7 +223,7 @@ function transmitir() {
 }
 setInterval(() => { for (const res of clientes) res.write(': ping\n\n'); }, 25000);
 
-function mudou() { alocacaoAutomatica(); marcarVez(); salvar(); transmitir(); }
+function mudou(motivo = 'Alteração') { alocacaoAutomatica(); marcarVez(); salvar(); backup(motivo); transmitir(); }
 
 // ---------------------------------------------------------------- sessões
 const sessoes = new Map(); // token -> { tipo: 'user'|'admin', id }
@@ -260,7 +312,7 @@ async function sincronizarPlanilha() {
     const mudouPrefs = JSON.stringify(prefs) !== JSON.stringify(db.preferencias);
     db.preferencias = prefs;
     db.planilha = { ...db.planilha, ultimaSync: Date.now(), erro: null, avisos, total: Object.keys(prefs).length };
-    if (mudouPrefs) mudou(); else { salvar(); }
+    if (mudouPrefs) mudou('Planilha de preferências atualizada'); else { salvar(); }
   } catch (e) {
     db.planilha = { ...db.planilha, erro: e.name === 'TimeoutError' ? 'A planilha demorou demais para responder.' : e.message, tentativa: Date.now() };
     salvar();
@@ -355,7 +407,7 @@ async function rotear(req, res) {
     if (!local) return erro(res, 404, 'Local não encontrado.');
     if (restantes(local) <= 0) return erro(res, 409, 'Esta OM não tem mais vagas.');
     db.alocacoes.push({ usuarioId: atual.id, localId: local.id, ts: Date.now() });
-    mudou();
+    mudou(`Escolha: ${atual.nome} → ${local.om}`);
     return json(res, 200, { ok: true, local: { om: local.om, cidade: local.cidade } });
   }
 
@@ -381,7 +433,7 @@ async function rotear(req, res) {
     if (!validarSenha(senha)) return erro(res, 400, 'A senha deve ter 4 dígitos, sem nenhum dígito repetido mais de 2 vezes.');
     if (db.usuarios.some(u => u.senha === senha)) return erro(res, 409, 'Senha já usada por outro militar.');
     db.usuarios.push({ id: novoId(), nome, senha });
-    mudou(); return json(res, 200, { ok: true, senha });
+    mudou(`Militar cadastrado: ${nome}`); return json(res, 200, { ok: true, senha });
   }
 
   if (recurso === 'usuarios' && id && req.method === 'PUT') {
@@ -394,21 +446,21 @@ async function rotear(req, res) {
       u.senha = String(corpo.senha);
       for (const [t, s] of sessoes) if (s.id === id) sessoes.delete(t);
     }
-    mudou(); return json(res, 200, { ok: true });
+    mudou(`Militar editado: ${u.nome}`); return json(res, 200, { ok: true });
   }
 
   if (recurso === 'usuarios' && id && req.method === 'DELETE') {
     db.usuarios = db.usuarios.filter(u => u.id !== id);
     db.alocacoes = db.alocacoes.filter(a => a.usuarioId !== id);
     db.vinculos = db.vinculos.filter(v => v.usuarioId !== id);
-    mudou(); return json(res, 200, { ok: true });
+    mudou('Militar excluído'); return json(res, 200, { ok: true });
   }
 
   if (rota === 'POST /api/admin/ordem') {
     const ids = corpo.ids || [];
     if (ids.length !== db.usuarios.length || !ids.every(i => db.usuarios.some(u => u.id === i))) return erro(res, 400, 'Lista de ordem inválida.');
     db.usuarios = ids.map(i => db.usuarios.find(u => u.id === i));
-    mudou(); return json(res, 200, { ok: true });
+    mudou('Ordem da classificação alterada'); return json(res, 200, { ok: true });
   }
 
   if (rota === 'POST /api/admin/locais') {
@@ -416,7 +468,7 @@ async function rotear(req, res) {
     const vagas = parseInt(corpo.vagas, 10);
     if (!om || !(vagas >= 0)) return erro(res, 400, 'Informe OM e número de vagas.');
     db.locais.push({ id: novoId(), om, cidade, vagas });
-    mudou(); return json(res, 200, { ok: true });
+    mudou(`OM cadastrada: ${om}`); return json(res, 200, { ok: true });
   }
 
   if (recurso === 'locais' && id && req.method === 'PUT') {
@@ -430,13 +482,13 @@ async function rotear(req, res) {
     }
     if (corpo.om !== undefined) l.om = String(corpo.om).trim() || l.om;
     if (corpo.cidade !== undefined) l.cidade = String(corpo.cidade).trim();
-    mudou(); return json(res, 200, { ok: true });
+    mudou(`OM editada: ${l.om}`); return json(res, 200, { ok: true });
   }
 
   if (recurso === 'locais' && id && req.method === 'DELETE') {
     if (ocupadas(id)) return erro(res, 409, 'Há militares alocados nesta OM. Desfaça as alocações antes.');
     db.locais = db.locais.filter(l => l.id !== id);
-    mudou(); return json(res, 200, { ok: true });
+    mudou('OM excluída'); return json(res, 200, { ok: true });
   }
 
   // Amarrar / soltar um militar numa vaga fixa. localId vazio = soltar.
@@ -446,7 +498,7 @@ async function rotear(req, res) {
     const antigo = vinculoDe(u.id);
     if (!corpo.localId) {
       db.vinculos = db.vinculos.filter(v => v.usuarioId !== u.id);
-      mudou(); return json(res, 200, { ok: true });
+      mudou(`Vaga fixa removida: ${u.nome}`); return json(res, 200, { ok: true });
     }
     const local = db.locais.find(l => l.id === corpo.localId);
     if (!local) return erro(res, 404, 'Local não encontrado.');
@@ -458,7 +510,7 @@ async function rotear(req, res) {
     db.alocacoes = db.alocacoes.filter(a => a.usuarioId !== u.id);
     db.vinculos = db.vinculos.filter(v => v.usuarioId !== u.id);
     db.vinculos.push({ usuarioId: u.id, localId: local.id });
-    mudou(); return json(res, 200, { ok: true });
+    mudou(`Vaga fixa: ${u.nome} → ${local.om}`); return json(res, 200, { ok: true });
   }
 
   // Administrador escolhe pelo militar da vez (funciona mesmo com as escolhas pausadas)
@@ -470,7 +522,7 @@ async function rotear(req, res) {
     if (!local) return erro(res, 404, 'Local não encontrado.');
     if (restantes(local) <= 0) return erro(res, 409, 'Esta OM não tem mais vagas.');
     db.alocacoes.push({ usuarioId: atual.id, localId: local.id, ts: Date.now(), admin: true });
-    mudou();
+    mudou(`Escolha pelo admin: ${atual.nome} → ${local.om}`);
     return json(res, 200, { ok: true });
   }
 
@@ -478,7 +530,7 @@ async function rotear(req, res) {
     const link = String(corpo.url || '').trim();
     if (link && !urlCsv(link)) return erro(res, 400, 'Link inválido. Copie o endereço da planilha do Google (com a aba Notas aberta).');
     db.planilha = link ? { url: link } : null;
-    if (!link) { db.preferencias = {}; mudou(); return json(res, 200, { ok: true }); }
+    if (!link) { db.preferencias = {}; mudou('Planilha de preferências desligada'); return json(res, 200, { ok: true }); }
     salvar();
     await sincronizarPlanilha();
     return json(res, 200, { ok: true, planilha: db.planilha });
@@ -493,19 +545,19 @@ async function rotear(req, res) {
   if (rota === 'POST /api/admin/pausa') {
     db.pausado = !!corpo.pausado;
     if (!db.pausado) db.aberturaProgramada = null; // abriu na mão: a programação perde o sentido
-    mudou(); return json(res, 200, { ok: true });
+    mudou(db.pausado ? 'Escolhas pausadas' : 'Escolhas abertas'); return json(res, 200, { ok: true });
   }
 
   // Programa (ou cancela, com quando = null) a abertura automática das escolhas.
   // "quando" é o instante em milissegundos; o navegador do admin converte a data/hora local dele.
   if (rota === 'POST /api/admin/agendar') {
-    if (corpo.quando === null) { db.aberturaProgramada = null; mudou(); return json(res, 200, { ok: true }); }
+    if (corpo.quando === null) { db.aberturaProgramada = null; mudou('Abertura programada cancelada'); return json(res, 200, { ok: true }); }
     const quando = Number(corpo.quando);
     if (!Number.isFinite(quando)) return erro(res, 400, 'Data e hora inválidas.');
     if (quando <= Date.now()) return erro(res, 400, 'Escolha uma data e hora no futuro.');
     if (!db.pausado) return erro(res, 409, 'As escolhas já estão abertas.');
     db.aberturaProgramada = quando;
-    mudou(); return json(res, 200, { ok: true });
+    mudou('Abertura programada'); return json(res, 200, { ok: true });
   }
 
   // Desfaz a escolha de um militar qualquer (não só a última). Ele volta para a fila
@@ -515,19 +567,42 @@ async function rotear(req, res) {
     if (!a) return erro(res, 404, 'Esta escolha já não existe. Atualize a página.');
     db.alocacoes = db.alocacoes.filter(x => x !== a);
     db.pausado = true;
-    mudou(); return json(res, 200, { ok: true });
+    mudou(`Escolha desfeita: ${db.usuarios.find(u => u.id === a.usuarioId)?.nome || '?'}`); return json(res, 200, { ok: true });
   }
 
   if (rota === 'POST /api/admin/desfazer') {
     // desfaz a última escolha manual e as automáticas que vieram depois dela
     while (db.alocacoes.length) { const a = db.alocacoes.pop(); if (!a.auto) break; }
     db.pausado = true; // pausa para evitar que a automação refaça imediatamente
-    mudou(); return json(res, 200, { ok: true });
+    mudou('Última escolha desfeita'); return json(res, 200, { ok: true });
   }
 
   if (rota === 'POST /api/admin/reset') {
     db.alocacoes = []; db.pausado = true; // vagas fixas (vinculos) são mantidas
-    mudou(); return json(res, 200, { ok: true });
+    mudou('Reset de todas as escolhas'); return json(res, 200, { ok: true });
+  }
+
+  if (rota === 'GET /api/admin/backups') return json(res, 200, lerIndiceBackups());
+
+  if (recurso === 'backups' && id && req.method === 'GET') {
+    if (!NOME_BACKUP.test(id)) return erro(res, 400, 'Backup inválido.');
+    try {
+      const b = JSON.parse(fs.readFileSync(path.join(PASTA_BACKUPS, id), 'utf8'));
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Content-Disposition': `attachment; filename="escolha-om-${id}"` });
+      return res.end(JSON.stringify(b.db, null, 2));
+    } catch { return erro(res, 404, 'Backup não encontrado.'); }
+  }
+
+  if (rota === 'POST /api/admin/backups/restaurar') {
+    const arq = String(corpo.arquivo || '');
+    if (!NOME_BACKUP.test(arq)) return erro(res, 400, 'Backup inválido.');
+    let b;
+    try { b = JSON.parse(fs.readFileSync(path.join(PASTA_BACKUPS, arq), 'utf8')); } catch { return erro(res, 404, 'Backup não encontrado.'); }
+    backup('Antes de restaurar um backup');
+    const falha = restaurarDados(b.db);
+    if (falha) return erro(res, 400, falha);
+    mudou(`Restaurado o backup de ${new Date(b.ts).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`);
+    return json(res, 200, { ok: true });
   }
 
   if (rota === 'GET /api/admin/backup') {
@@ -536,17 +611,17 @@ async function rotear(req, res) {
   }
 
   if (rota === 'POST /api/admin/restaurar') {
-    const d = corpo;
-    if (!Array.isArray(d.locais) || !Array.isArray(d.usuarios) || !Array.isArray(d.alocacoes)) return erro(res, 400, 'Arquivo de backup inválido.');
-    db = { locais: d.locais, usuarios: d.usuarios, alocacoes: d.alocacoes, vinculos: Array.isArray(d.vinculos) ? d.vinculos : [], pausado: true, aberturaProgramada: null,
-      preferencias: d.preferencias && typeof d.preferencias === 'object' ? d.preferencias : {}, planilha: d.planilha || null };
-    mudou(); return json(res, 200, { ok: true });
+    backup('Antes de restaurar um backup');
+    const falha = restaurarDados(corpo);
+    if (falha) return erro(res, 400, falha);
+    mudou('Backup restaurado (arquivo enviado)'); return json(res, 200, { ok: true });
   }
 
   return erro(res, 404, 'Rota inexistente');
 }
 
 carregar();
+backup('Servidor iniciado');
 sincronizarPlanilha();
 
 // Abertura programada: confere a cada segundo. Se o servidor estava fora do ar na hora
@@ -555,7 +630,7 @@ setInterval(() => {
   if (db.aberturaProgramada && Date.now() >= db.aberturaProgramada) {
     db.aberturaProgramada = null;
     if (db.pausado) { db.pausado = false; console.log('Escolhas abertas automaticamente (abertura programada).'); }
-    mudou();
+    mudou('Abertura automática (programada)');
   }
 }, 1000);
 http.createServer((req, res) => {

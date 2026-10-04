@@ -33,7 +33,13 @@ sobreviva a reinícios. Opções simples:
   (desative o buffer para `/api/eventos`, ou use `proxy_buffering off`).
 
 Evite planos com disco efêmero (ex.: Render gratuito): os dados somem ao reiniciar.
-Use o botão **Baixar backup** no admin periodicamente.
+
+**Backups automáticos:** a cada mudança (escolha, desfazer, reset, pausa, vaga fixa,
+edição no admin…) e ao ligar, o servidor guarda uma cópia em `backups/`, ao lado do
+`db.json` (no Railway, dentro do volume), mantendo as 50 mais recentes. Em
+Administração > Andamento > "Backups automáticos" dá para restaurar ou baixar
+qualquer uma. Restaurar pausa as escolhas e guarda antes o estado atual.
+O botão **Baixar backup** continua servindo para guardar uma cópia fora do servidor.
 
 ## Telão
 
