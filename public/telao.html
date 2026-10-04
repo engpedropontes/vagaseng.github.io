@@ -88,6 +88,56 @@ body.sem-cursor{cursor:none}
 .ultimas li:first-child span{color:var(--tinta)}
 .vazio{color:var(--tinta2);font:500 clamp(14px,2vh,24px)/1.3 var(--corpo)}
 
+/* ---------- versão celular (tela estreita ou baixa): uma coluna, rola, letras de tamanho fixo ---------- */
+.lista,.cidade-card{display:none}
+html.celular,body.celular{height:auto;overflow:auto}
+body.celular .tela{display:block;height:auto;padding:10px 12px 28px}
+body.celular .topo{flex-wrap:wrap;gap:4px 12px;margin-bottom:10px}
+body.celular .topo h1{font-size:20px;flex:1 1 auto}
+body.celular .relogio{font-size:18px;order:1}
+body.celular .progresso{order:2}
+body.celular .progresso{flex-basis:100%;text-align:left;font-size:14px}
+body.celular .barra{width:100%;height:5px}
+body.celular .corpo{display:flex;flex-direction:column;gap:10px}
+body.celular .lado{order:-1;gap:8px}
+body.celular .ultimas{display:none}
+body.celular .cartao{padding:8px 12px}
+body.celular .cartao small{font-size:12px;margin-bottom:3px}
+body.celular .agora .nome{font-size:26px;overflow-wrap:normal}
+body.celular .agora .linha{font-size:15px;margin-top:4px}
+body.celular .proximo .nome{font-size:20px}
+body.celular .aviso{font-size:15px}
+body.celular .mapa-box{aspect-ratio:1/1.02;min-height:0}
+body.celular .legenda-mapa,body.celular .fonte,body.celular .sem-local{display:none}
+@media (orientation:landscape){
+  body.celular .mapa-box{width:min(100%,calc((100vh - 24px) / 1.02));margin:0 auto}
+  body.celular .lado{flex-direction:row;flex-wrap:wrap}
+  body.celular .lado > .agora,body.celular .lado > .proximo{flex:1 1 0}
+  body.celular .lado > .aviso{flex-basis:100%}
+}
+body.celular .anuncio{top:6px;font-size:15px;padding:6px 12px;white-space:normal;max-width:94%;text-align:center}
+body.celular #sobre{pointer-events:auto}
+body.celular .pino{cursor:pointer}
+body.celular .pino.aberto{box-shadow:0 0 0 4px var(--ambar)}
+/* cartão da cidade tocada no mapa */
+body.celular .cidade-card{display:block;position:relative;background:var(--papel);border:2px solid var(--ambar);padding:10px 12px}
+body.celular .cidade-card[hidden]{display:none}
+.cidade-card h3{margin:0 28px 6px 0;font:700 18px/1.1 var(--cond)}
+.cidade-card .fechar{position:absolute;top:4px;right:6px;background:none;border:0;color:var(--tinta2);font:700 22px/1 var(--corpo);padding:4px 8px}
+/* lista de OMs por região, embaixo do mapa */
+body.celular .lista{display:block;margin-top:12px}
+.lista .dica{margin:0 0 8px;font-size:13px;color:var(--tinta2)}
+.lista .dica i{display:inline-block;width:10px;height:10px;border-radius:50%;margin:0 4px -1px 8px}
+.lista h2{font:700 17px/1 var(--cond);margin:14px 0 6px;color:var(--tinta2);letter-spacing:.06em;text-transform:uppercase}
+.item-om{border:1px solid var(--borda);background:var(--papel);padding:7px 10px;margin-bottom:6px}
+.item-om .l1{display:flex;justify-content:space-between;gap:8px;font:600 16px/1.2 var(--cond)}
+.item-om .l1 span{color:var(--livre);white-space:nowrap}
+.item-om.cheio .l1 span{color:var(--cheio)}
+.item-om .cid{font-size:12px;color:var(--tinta2)}
+.item-om .quem{font:500 13px/1.3 var(--corpo);color:var(--tinta)}
+.item-om.cheio{opacity:.75}
+.lista .fonte-lista{margin-top:12px;font-size:10px;color:#5D7394}
+
 #conexao{position:fixed;bottom:12px;left:50%;transform:translateX(-50%);background:#FF8A7A;color:#0A1628;padding:8px 14px;font-weight:600;z-index:900}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
@@ -108,6 +158,7 @@ body.sem-cursor{cursor:none}
       <div class="sem-local" id="semLocal"></div>
       <div class="fonte">Malha: IBGE · Municípios: IBGE (lista kelvins/municipios-brasileiros)</div>
     </div>
+    <div class="cidade-card" id="cidadeCard" hidden></div>
     <aside class="lado">
       <div class="cartao agora"><small>ESCOLHENDO AGORA</small><div class="nome" id="agoraNome">—</div>
         <div class="linha"><span id="agoraPos"></span><span class="cron" id="cron"></span></div></div>
@@ -116,6 +167,7 @@ body.sem-cursor{cursor:none}
       <div class="cartao ultimas"><small>ÚLTIMAS ESCOLHAS</small><ol id="ultimas"></ol></div>
     </aside>
   </div>
+  <section class="lista" id="lista"></section>
 </div>
 <div id="conexao" hidden>Reconectando ao servidor…</div>
 
@@ -138,6 +190,44 @@ function localizar(cidade) {
 const chave = c => { const r = localizar(c); return r ? r.join(',') : null; };
 
 let estado = null, difRelogio = 0, ultimoHist = null, novaCidade = null, timerNovo = null;
+
+// versão celular: tela estreita (em pé) ou baixa (deitado)
+let celular = false, cidadeAberta = null;
+function verModo() {
+  const c = matchMedia('(max-width: 760px), (max-height: 500px)').matches;
+  if (c !== celular) { celular = c; document.body.classList.toggle('celular', c); document.documentElement.classList.toggle('celular', c); if (!c) fecharCidade(); }
+}
+verModo();
+const REGIAO = { AC: 'Norte', AM: 'Norte', AP: 'Norte', PA: 'Norte', RO: 'Norte', RR: 'Norte', TO: 'Norte',
+  AL: 'Nordeste', BA: 'Nordeste', CE: 'Nordeste', MA: 'Nordeste', PB: 'Nordeste', PE: 'Nordeste', PI: 'Nordeste', RN: 'Nordeste', SE: 'Nordeste',
+  DF: 'Centro-Oeste', GO: 'Centro-Oeste', MS: 'Centro-Oeste', MT: 'Centro-Oeste',
+  ES: 'Sudeste', MG: 'Sudeste', RJ: 'Sudeste', SP: 'Sudeste', PR: 'Sul', RS: 'Sul', SC: 'Sul' };
+const ufDe = cidade => (String(cidade || '').trim().match(/[-/,\s]\s*([A-Za-z]{2})$/)?.[1] || '').toUpperCase();
+const itemOm = l => `<div class="item-om${l.restantes ? '' : ' cheio'}"><div class="l1"><b>${esc(l.om)}</b><span>${l.restantes ? `${l.restantes} livre${l.restantes > 1 ? 's' : ''}` : 'completa'} · ${l.vagas - l.restantes}/${l.vagas}</span></div>
+  <div class="cid">${esc(l.cidade)}</div>${l.ocupantes.map(n => `<div class="quem">${esc(n)}</div>`).join('')}</div>`;
+
+// lista de OMs agrupada por região (celular)
+function desenharLista() {
+  if (!celular || !estado) return;
+  const ordem = ['Norte', 'Nordeste', 'Centro-Oeste', 'Sudeste', 'Sul', 'Outras'], grupos = {};
+  for (const l of estado.locais) {
+    if (l.vagas === 0) continue;
+    (grupos[REGIAO[ufDe(l.cidade)] || 'Outras'] ||= []).push(l);
+  }
+  $('#lista').innerHTML = `<p class="dica">Toque num pino do mapa para ver a cidade.<i style="background:var(--livre)"></i>com vaga<i style="background:var(--cheio)"></i>completa</p>`
+    + ordem.filter(r => grupos[r]).map(r => `<h2>${r}</h2>` + grupos[r].map(itemOm).join('')).join('')
+    + '<div class="fonte-lista">Malha: IBGE · Municípios: IBGE (lista kelvins/municipios-brasileiros)</div>';
+}
+
+// cartão da cidade tocada no mapa (celular)
+function abrirCidade(it) {
+  cidadeAberta = it.k;
+  const c = $('#cidadeCard');
+  c.innerHTML = `<button class="fechar" aria-label="Fechar">×</button><h3>${esc(it.oms[0].cidade)}</h3>` + it.oms.map(itemOm).join('');
+  c.hidden = false;
+  c.querySelector('.fechar').onclick = ev => { ev.stopPropagation(); fecharCidade(); desenharMapa(); };
+}
+function fecharCidade() { cidadeAberta = null; const c = $('#cidadeCard'); if (c) c.hidden = true; }
 
 // ------------------------------------------------ mapa
 // Mapa desenhado aqui mesmo (SVG), com a malha dos estados do IBGE. Pinos e rótulos
@@ -226,11 +316,19 @@ function desenharMapa() {
       svg.insertAdjacentHTML('beforeend', `<line x1="${it.p.x}" y1="${it.p.y}" x2="${it.q.x}" y2="${it.q.y}" stroke="#E3EBF6" stroke-width="1.5"/><circle cx="${it.p.x}" cy="${it.p.y}" r="2.5" fill="#E3EBF6"/>`);
     }
     const d = document.createElement('div');
-    d.className = 'pino' + (it.livres ? '' : ' cheio') + (it.k === novaCidade ? ' novo' : '');
+    d.className = 'pino' + (it.livres ? '' : ' cheio') + (it.k === novaCidade ? ' novo' : '') + (celular && it.k === cidadeAberta ? ' aberto' : '');
+    if (celular) d.onclick = ev => { ev.stopPropagation(); abrirCidade(it); desenharMapa(); };
     d.style.cssText = `left:${it.q.x}px;top:${it.q.y}px;width:${2 * R}px;height:${2 * R}px`;
     d.textContent = it.livres || '✓';
     sobre.appendChild(d);
     ocupado.push({ x: it.q.x - R - 2, y: it.q.y - R - 2, w: 2 * R + 4, h: 2 * R + 4 });
+  }
+
+  // celular: sem rótulos fixos (tocar no pino mostra a cidade); atualiza o cartão aberto
+  if (celular) {
+    const aberto = itens.find(it => it.k === cidadeAberta);
+    if (aberto) abrirCidade(aberto); else fecharCidade();
+    return;
   }
 
   // rótulos: primeiro os das regiões mais cheias de pinos, que têm menos opções de lugar
@@ -297,6 +395,7 @@ function render() {
   }
   ultimoHist = n;
   desenharMapa();
+  desenharLista();
   relogios();
 }
 
@@ -321,7 +420,7 @@ function conectar() {
 }
 
 // tela cheia ao clicar; esconde o cursor parado; mantém a tela acesa quando o navegador permite
-document.addEventListener('click', () => { if (!document.fullscreenElement) document.documentElement.requestFullscreen?.().catch(() => {}); });
+document.addEventListener('click', () => { if (!celular && !document.fullscreenElement) document.documentElement.requestFullscreen?.().catch(() => {}); });
 let tCursor;
 document.addEventListener('mousemove', () => { document.body.classList.remove('sem-cursor'); clearTimeout(tCursor); tCursor = setTimeout(() => document.body.classList.add('sem-cursor'), 3000); });
 async function manterAcesa() { try { await navigator.wakeLock?.request('screen'); } catch {} }
@@ -329,7 +428,7 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 manterAcesa();
 
 let tRedim;
-window.addEventListener('resize', () => { clearTimeout(tRedim); tRedim = setTimeout(() => { desenharEstados(); desenharMapa(); }, 200); });
+window.addEventListener('resize', () => { clearTimeout(tRedim); tRedim = setTimeout(() => { verModo(); desenharEstados(); desenharMapa(); desenharLista(); }, 200); });
 
 // carrega a malha dos estados e a lista de municípios (arquivos do próprio site) e conecta
 (async () => {
