@@ -431,7 +431,7 @@ function render() {
         ? `<button class="op escolher" data-local="${l.id}"><b>${i + 1}ª</b> ${esc(l.om)} <span>(${esc(l.cidade)}) · ${l.restantes} livre${l.restantes > 1 ? 's' : ''}</span></button>`
         : `<span class="op cheia"><b>${i + 1}ª</b> ${esc(l.om)} <span>(${esc(l.cidade)}) · cheia</span></span>`;
     }).join('');
-    area.innerHTML = `<div class="meu vez adm-vez"><div class="status"><b>Modo administrador: escolhendo por ${esc(estado.atual.nome)}</b><span class="online-txt">${pontoOnline(estado.atual.id)}${online.has(estado.atual.id) ? 'Está com o site aberto agora.' : 'Não está com o site aberto.'}</span>Toque em "Escolher" na OM desejada. Após confirmar, a vez passa para ${esc(estado.proximo?.nome || 'o próximo')} e você continua escolhendo pelo seguinte.${estado.pausado ? ' As escolhas estão pausadas para os militares, mas o administrador pode escolher.' : ''}${pv?.esgotadas ? ' As OMs da lista de preferências dele já foram preenchidas.' : ''}</div>${porPref}<button class="btn" id="sairAdmHome">Sair do modo admin</button>
+    area.innerHTML = `<div class="meu vez adm-vez"><div class="status"><b>Modo administrador: escolhendo por ${esc(estado.atual.nome)}</b><span class="online-txt">${pontoOnline(estado.atual.id)}${online.has(estado.atual.id) ? 'Está com o site aberto agora.' : 'Não está com o site aberto.'}</span>Toque em "Escolher" na OM desejada. Após confirmar, a vez passa para ${esc(estado.proximo?.nome || 'o próximo')} e você continua escolhendo pelo seguinte.${estado.pausado ? ' As escolhas estão pausadas para os militares, mas o administrador pode escolher.' : ''}${pv?.esgotadas ? ' As OMs da lista de preferências dele já foram preenchidas.' : ''}${admDados?.preSelecoes?.[estado.atual.id] ? ` <b>A pré-seleção dele (${esc(nomeOm(admDados.preSelecoes[estado.atual.id]))}) ${estado.pausado ? 'será aplicada ao abrir as escolhas' : 'está sem vaga'}.</b>` : ''}</div>${porPref}<button class="btn" id="sairAdmHome">Sair do modo admin</button>
       ${lista ? `<div class="prefs-adm"><small>Preferências de ${esc(estado.atual.nome)} (planilha):</small>${lista}</div>` : ''}</div>`;
   }
   else if (!eu) area.innerHTML = '';
@@ -688,7 +688,7 @@ function renderAdmin() {
         <label class="btn" style="margin:0">Restaurar backup<input type="file" accept=".json" id="restaurar" hidden></label></div>
       <h2>Histórico de alocações</h2>
       <div class="rolagem"><table><thead><tr><th>#</th><th>Horário</th><th>Militar</th><th>OM</th><th>Tipo</th><th></th></tr></thead><tbody>
-      ${d.historico.map((h, i) => `<tr><td>${i + 1}</td><td>${new Date(h.ts).toLocaleString('pt-BR')}</td><td>${esc(h.nome)}</td><td>${esc(h.local)}</td><td>${h.auto ? 'Automática' : h.admin ? 'Pelo admin' : 'Escolha'}</td>
+      ${d.historico.map((h, i) => `<tr><td>${i + 1}</td><td>${new Date(h.ts).toLocaleString('pt-BR')}</td><td>${esc(h.nome)}</td><td>${esc(h.local)}</td><td>${h.auto ? 'Automática' : h.pre ? 'Pré-seleção' : h.admin ? 'Pelo admin' : 'Escolha'}</td>
         <td><button class="desfazer-x" data-desfazer-u="${h.usuarioId}" title="Desfazer a escolha de ${esc(h.nome)}" aria-label="Desfazer a escolha de ${esc(h.nome)}">✕</button></td></tr>`).reverse().join('') || '<tr><td colspan="6">Nenhuma escolha ainda.</td></tr>'}
       </tbody></table></div>
       <details class="backups" id="dBackups" ${backupsAbertos ? 'open' : ''}><summary>Backups automáticos (${admBackups.length}) — uma cópia a cada 10 escolhas e outra ao final</summary>
@@ -748,6 +748,30 @@ function renderAdmin() {
       ${p?.avisos?.length ? `<ul class="avisos">${p.avisos.map(a => `<li>${esc(a)}</li>`).join('')}</ul>` : ''}
       ${tabelaPrevia(d)}</div>`;
   }
+  if (aba === 'pre') {
+    const ps = d.preSelecoes || {};
+    const pendentes = d.classificacao.filter(c => !c.localId);
+    const locaisOk = d.locais.filter(l => l.restantes > 0);
+    const marcados = pendentes.filter(c => ps[c.id]);
+    const situacao = c => {
+      const l = d.locais.find(x => x.id === ps[c.id]);
+      if (!l || l.restantes <= 0) return '<b style="color:var(--perigo)">OM sem vaga: não será aplicada; ele escolhe normalmente</b>';
+      if (d.atual?.id === c.id) return d.pausado ? '<b style="color:var(--ambar)">É a vez dele: será aplicada ao abrir as escolhas</b>' : 'Aplicando…';
+      return 'Aguardando a vez';
+    };
+    corpo = `<div class="painel">
+      <form class="form fixos-form" id="fPre">
+        <label>Militar<select name="usuarioId" required><option value="">Selecione…</option>
+          ${pendentes.map(c => `<option value="${c.id}">${c.pos}º ${esc(c.nome)}${ps[c.id] ? ' (já tem pré-seleção)' : ''}</option>`).join('')}</select></label>
+        <label>OM<select name="localId" required><option value="">Selecione…</option>
+          ${locaisOk.map(l => `<option value="${l.id}">${esc(l.om)} (${esc(l.cidade)}) · ${l.restantes} livre${l.restantes > 1 ? 's' : ''}</option>`).join('')}</select></label>
+        <button class="btn btn-pri">Pré-selecionar</button></form>
+      <div class="rolagem"><table><thead><tr><th>Posição</th><th>Militar</th><th>OM pré-selecionada</th><th>Situação</th><th></th></tr></thead><tbody>
+      ${marcados.map(c => `<tr><td>${c.pos}º</td><td>${pontoOnline(c.id)}${esc(c.nome)}</td><td>${esc(omDe(ps[c.id]))}</td><td>${situacao(c)}</td>
+        <td><button class="btn btn-sm btn-perigo" data-tirar-pre="${c.id}">Remover</button></td></tr>`).join('') || '<tr><td colspan="5">Nenhuma pré-seleção.</td></tr>'}
+      </tbody></table></div>
+      <div class="legenda">Quando chegar a vez do militar, com as escolhas abertas, a OM pré-selecionada é escolhida sozinha, se ainda tiver vaga. Sem vaga, nada é feito e ele escolhe normalmente. A escolha aparece no histórico como "Pré-seleção" e pode ser desfeita no ✕. Só o admin vê esta lista.</div></div>`;
+  }
   if (aba === 'oms') {
     corpo = `<div class="painel">
       <form class="form" id="fLocal"><label>OM<input name="om" required placeholder="Ex.: 10º BEC"></label>
@@ -765,6 +789,7 @@ function renderAdmin() {
       <button class="${aba === 'andamento' ? 'on' : ''}" data-aba="andamento">Andamento</button>
       <button class="${aba === 'militares' ? 'on' : ''}" data-aba="militares">Militares e senhas</button>
       <button class="${aba === 'fixas' ? 'on' : ''}" data-aba="fixas">Vagas fixas</button>
+      <button class="${aba === 'pre' ? 'on' : ''}" data-aba="pre">Pré-seleção</button>
       <button class="${aba === 'oms' ? 'on' : ''}" data-aba="oms">OMs e vagas</button>
       <button class="${aba === 'prefs' ? 'on' : ''}" data-aba="prefs">Preferências</button>
       <button data-aba="sair" style="margin-left:auto">Sair do admin</button></div>${corpo}`;
@@ -909,6 +934,10 @@ $('#admin').addEventListener('click', async e => {
     const cidade = prompt('Cidade:', l.cidade); if (cidade === null) return;
     await adm('PUT', '/api/admin/locais/' + l.id, { om, cidade });
   }
+  if (ds.tirarPre) {
+    const c = d.classificacao.find(x => x.id === ds.tirarPre);
+    if (confirm(`Remover a pré-seleção de ${c?.nome}?`)) await adm('POST', '/api/admin/preselecao', { usuarioId: ds.tirarPre, localId: null });
+  }
   if (ds.soltar) {
     const c = d.classificacao.find(x => x.id === ds.soltar);
     if (confirm(`Soltar ${c.nome} da vaga fixa? Ele volta para a fila de escolha.`)) await adm('POST', '/api/admin/vinculo', { usuarioId: ds.soltar, localId: null });
@@ -940,6 +969,13 @@ $('#admin').addEventListener('submit', async e => {
   if (e.target.id === 'fPlanilha') {
     const b = e.target.querySelector('.btn-pri'); b.disabled = true; b.textContent = 'Sincronizando…';
     try { await adm('POST', '/api/admin/planilha', { url: f.url }); } finally { carregarAdmin(); }
+  }
+  if (e.target.id === 'fPre') {
+    const c = admDados.classificacao.find(x => x.id === f.usuarioId), l = admDados.locais.find(x => x.id === f.localId);
+    const agora = admDados.atual?.id === f.usuarioId && !admDados.pausado;
+    if (agora && !confirm(`É a vez de ${c.nome} e as escolhas estão abertas: ${l.om} será escolhida agora mesmo. Continuar?`)) return;
+    const r = await adm('POST', '/api/admin/preselecao', f);
+    if (r.aplicada) alert(`${c.nome} → ${l.om}: escolha feita.`);
   }
   if (e.target.id === 'fFixo') {
     const c = admDados.classificacao.find(x => x.id === f.usuarioId);
