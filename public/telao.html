@@ -413,7 +413,7 @@ setInterval(relogios, 1000);
 
 // ------------------------------------------------ tempo real
 function conectar() {
-  const es = new EventSource('/api/eventos');
+  const es = new EventSource('/api/eventos?origem=telao');
   es.onopen = () => $('#conexao').hidden = true;
   es.onerror = () => $('#conexao').hidden = false;
   es.onmessage = e => { estado = JSON.parse(e.data); difRelogio = Date.now() - estado.agora; render(); };

@@ -9,6 +9,8 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const zlib = require('zlib');
+const net = require('net');
 
 const PORT = process.env.PORT || 3000;
 const ADMIN_SENHA = process.env.ADMIN_SENHA || '8769';
@@ -247,12 +249,50 @@ function estadoPublico() {
 }
 
 // ---------------------------------------------------------------- tempo real
-const clientes = new Set();
+// Conexões em tempo real abertas: res -> { origem: 'site' | 'telao', uf } (uma por aba aberta)
+const clientes = new Map();
 function transmitir() {
   const msg = `data: ${JSON.stringify(estadoPublico())}\n\n`;
-  for (const res of clientes) res.write(msg);
+  for (const res of clientes.keys()) res.write(msg);
 }
-setInterval(() => { for (const res of clientes) res.write(': ping\n\n'); }, 25000);
+setInterval(() => { for (const res of clientes.keys()) res.write(': ping\n\n'); }, 25000);
+
+// ---------------------------------------------------------------- localização aproximada dos acessos
+// IP -> UF pela base geo/geo-br.bin.gz (DB-IP IP to City Lite, CC BY 4.0; gerada por geo/gerar.js).
+// Só a contagem por estado vai para o admin; os IPs não são guardados.
+let geo = null;
+try {
+  const b = zlib.gunzipSync(fs.readFileSync(path.join(__dirname, 'geo', 'geo-br.bin.gz')));
+  const n = b.readUInt32LE(0), cab = JSON.parse(b.subarray(4, 4 + n).toString());
+  geo = { ...cab, b, o4: 4 + n, o6: 4 + n + cab.n4 * 9 };
+} catch (e) { console.error('Sem base de localização dos acessos:', e.message); }
+
+function ufDoIp(ip) {
+  if (!geo || !ip) return null;
+  ip = ip.replace(/^::ffff:/i, '');
+  const busca = (n, ini, tam, ler) => { // busca binária pela faixa que contém o IP
+    let lo = 0, hi = n - 1;
+    while (lo <= hi) {
+      const m = (lo + hi) >> 1, o = ini + m * tam, [s, e] = ler(o);
+      if (ip < s) hi = m - 1; else if (ip > e) lo = m + 1; else return geo.siglas[geo.b.readUInt8(o + tam - 1)];
+    }
+    return null;
+  };
+  if (net.isIPv4(ip)) {
+    const v = ip.split('.').reduce((a, x) => a * 256 + +x, 0);
+    ip = v;
+    return busca(geo.n4, geo.o4, 9, o => [geo.b.readUInt32LE(o), geo.b.readUInt32LE(o + 4)]);
+  }
+  if (net.isIPv6(ip)) {
+    const [a, z] = ip.split('::'); const h = a ? a.split(':') : [], t = z !== undefined ? (z ? z.split(':') : []) : [];
+    const g = [...h, ...Array(Math.max(0, 8 - h.length - t.length)).fill('0'), ...t];
+    ip = g.slice(0, 4).reduce((acc, x) => (acc << 16n) | BigInt(parseInt(x || '0', 16)), 0n);
+    return busca(geo.n6, geo.o6, 17, o => [geo.b.readBigUInt64LE(o), geo.b.readBigUInt64LE(o + 8)]);
+  }
+  return null;
+}
+// IP de quem acessa: no Railway vem nos cabeçalhos do proxy
+const ipCliente = req => String(req.headers['x-real-ip'] || (req.headers['x-forwarded-for'] || '').split(',')[0] || req.socket.remoteAddress || '').trim();
 
 function mudou() {
   // pré-seleções e alocação automática podem se encadear (uma escolha libera a vez do próximo)
@@ -418,7 +458,7 @@ async function rotear(req, res) {
   if (rota === 'GET /api/eventos') {
     res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
     res.write(`data: ${JSON.stringify(estadoPublico())}\n\n`);
-    clientes.add(res);
+    clientes.set(res, { origem: url.searchParams.get('origem') === 'telao' ? 'telao' : 'site', uf: ufDoIp(ipCliente(req)) });
     req.on('close', () => clientes.delete(res));
     return;
   }
@@ -473,6 +513,15 @@ async function rotear(req, res) {
 
   if (rota === 'GET /api/admin/dados') return json(res, 200, { ...comPreferencias(estadoPublico()), usuarios: db.usuarios, planilha: db.planilha, online: onlineAgora(), preSelecoes: db.preSelecoes });
   if (rota === 'GET /api/admin/online') return json(res, 200, onlineAgora());
+  // quantas abas estão com o site ou o telão abertos agora, e de que estado (aproximado)
+  if (rota === 'GET /api/admin/acessos') {
+    const porUF = {}; let site = 0, telao = 0, semLocal = 0;
+    for (const c of clientes.values()) {
+      c.origem === 'telao' ? telao++ : site++;
+      if (c.uf) porUF[c.uf] = (porUF[c.uf] || 0) + 1; else semLocal++;
+    }
+    return json(res, 200, { total: site + telao, site, telao, logados: onlineAgora().length, porUF, semLocal });
+  }
 
   if (rota === 'POST /api/admin/usuarios') {
     const nome = String(corpo.nome || '').trim().toUpperCase();
