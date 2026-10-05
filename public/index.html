@@ -134,6 +134,10 @@ a.btn-prefs{display:inline-block;text-decoration:none}
 .fila li.voce .q::after{content:" (você)";font-weight:400}
 .prefs td.ok{color:#8CC0FF}
 .online-txt{display:block;margin:2px 0 6px;font-weight:600}
+.acessos{margin-top:8px;padding-top:8px;border-top:1px dashed var(--borda)}
+.acessos span{color:var(--tinta2)}
+.acessos span b{color:var(--tinta);font-weight:600}
+.acessos small{display:block;color:#5D7394;font-size:12px;margin-top:2px}
 .ponto{display:inline-block;width:9px;height:9px;border-radius:50%;border:1.5px solid #5D7394;margin:0 6px 1px 0;vertical-align:middle}
 .ponto.on{background:#3FCB7E;border-color:#3FCB7E;box-shadow:0 0 0 2px rgba(63,203,126,.25)}
 .fila li.atual .ponto:not(.on){border-color:#D7E6FA}
@@ -344,6 +348,19 @@ let token = localStorage.getItem('tok');
 let admTok = sessionStorage.getItem('adm'), admDados = null, aba = 'andamento';
 let admBackups = [], backupsAbertos = false; // backups automáticos (aba Andamento)
 let online = new Set(); // ids dos militares com o site aberto (só o admin recebe)
+let acessos = null; // abas abertas agora (site/telão) e estado aproximado — só o admin recebe
+const REGIOES = [['Norte', 'AC AM AP PA RO RR TO'], ['Nordeste', 'AL BA CE MA PB PE PI RN SE'], ['Centro-Oeste', 'DF GO MS MT'], ['Sudeste', 'ES MG RJ SP'], ['Sul', 'PR RS SC']];
+function textoAcessos() {
+  if (!acessos) return '';
+  const regioes = REGIOES.map(([r, ufs]) => {
+    const lista = ufs.split(' ').filter(uf => acessos.porUF[uf]).sort((a, b) => acessos.porUF[b] - acessos.porUF[a]);
+    const n = lista.reduce((s, uf) => s + acessos.porUF[uf], 0);
+    return n ? { r, n, det: lista.map(uf => `${uf} ${acessos.porUF[uf]}`).join(', ') } : null;
+  }).filter(Boolean).sort((a, b) => b.n - a.n);
+  return `<div class="acessos">Acessando agora: <b>${acessos.total}</b> (${acessos.site} no site · ${acessos.telao} no telão) · Logados com senha: <b>${acessos.logados}</b><br>
+    <span>${regioes.map(x => `<b>${x.r} ${x.n}</b> (${x.det})`).join(' · ') || 'Nenhum acesso identificado'}${acessos.semLocal ? ` · Não identificado ${acessos.semLocal}` : ''}</span>
+    <small>Conta abas abertas; localização aproximada pelo IP (no 4G pode aparecer o estado da operadora).</small></div>`;
+}
 // ponto verde (online) ou vazado (fora) ao lado do nome — só para o admin
 const pontoOnline = id => admTok ? (online.has(id) ? '<i class="ponto on" title="Com o site aberto agora"></i>' : '<i class="ponto" title="Não está com o site aberto"></i>') : '';
 let modoLogin = 'user';
@@ -591,8 +608,10 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 setInterval(async () => {
   if (!admTok) return;
   try {
-    const ids = await api('GET', '/api/admin/online', null, admTok);
-    if (ids.length === online.size && ids.every(id => online.has(id))) return;
+    const [ids, ac] = await Promise.all([api('GET', '/api/admin/online', null, admTok), api('GET', '/api/admin/acessos', null, admTok)]);
+    const mesmoAcesso = JSON.stringify(ac) === JSON.stringify(acessos);
+    acessos = ac;
+    if (ids.length === online.size && ids.every(id => online.has(id)) && mesmoAcesso) return;
     online = new Set(ids); render(); renderAdmin();
   } catch {}
 }, 10000);
@@ -648,6 +667,7 @@ async function carregarAdmin() {
   try {
     [admDados, admBackups] = await Promise.all([api('GET', '/api/admin/dados', null, admTok), api('GET', '/api/admin/backups', null, admTok)]);
     online = new Set(admDados.online || []);
+    acessos = await api('GET', '/api/admin/acessos', null, admTok).catch(() => acessos);
     renderAdmin(); if (modoAdm()) render();
   }
   catch (err) {
@@ -678,8 +698,8 @@ function renderAdmin() {
         <button class="btn btn-pri">${d.aberturaProgramada ? 'Alterar' : 'Programar abertura'}</button>
         ${d.aberturaProgramada ? `<button type="button" class="btn btn-perigo" data-a="cancelarAgenda">Cancelar programação</button>
           <span>Programada para <b>${quandoTxt(d.aberturaProgramada)}</b> · <span class="falta-abrir"></span></span>` : '<span style="color:var(--tinta2)">Hora do seu aparelho. O servidor abre sozinho, mesmo com o site fechado.</span>'}</form>` : ''}
-      <div class="bloco"><div>Escolhendo agora: ${d.atual ? pontoOnline(d.atual.id) : ''}<b>${esc(d.atual?.nome || '—')}</b><span class="cron"></span> &nbsp; Próximo: ${d.proximo ? pontoOnline(d.proximo.id) : ''}<b>${esc(d.proximo?.nome || '—')}</b> &nbsp; <span style="color:var(--tinta2)">Online agora: <b>${online.size}</b></span><br>
-        Vagas restantes: <b>${d.totalRestante}</b> &nbsp; Militares sem OM: <b>${d.classificacao.filter(c => !c.localId).length}</b> &nbsp; Vagas fixas: <b>${d.classificacao.filter(c => c.fixo).length}</b></div></div>
+      <div class="bloco"><div>Escolhendo agora: ${d.atual ? pontoOnline(d.atual.id) : ''}<b>${esc(d.atual?.nome || '—')}</b><span class="cron"></span> &nbsp; Próximo: ${d.proximo ? pontoOnline(d.proximo.id) : ''}<b>${esc(d.proximo?.nome || '—')}</b> <br>
+        Vagas restantes: <b>${d.totalRestante}</b> &nbsp; Militares sem OM: <b>${d.classificacao.filter(c => !c.localId).length}</b> &nbsp; Vagas fixas: <b>${d.classificacao.filter(c => c.fixo).length}</b>${textoAcessos()}</div></div>
       <div class="bloco"><button class="btn" data-a="desfazer">Desfazer última escolha</button>
         <button class="btn btn-perigo" data-a="reset" title="As vagas fixas são mantidas">Resetar todas as escolhas</button>
         <button class="btn" data-a="backup">Baixar backup</button>

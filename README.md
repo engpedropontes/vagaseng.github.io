@@ -91,3 +91,8 @@ primeira opção dele que ainda tiver vaga.
 Distintivo da Arma de Engenharia (`public/engenharia.svg`): Diego Biavati, via
 [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Distintivo_da_Arma_de_Engenharia_-_Ex%C3%A9rcito_Brasileiro.svg),
 licença [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/deed.pt-br). Recortado e sem os metadados do editor.
+
+Localização aproximada dos acessos (`geo/geo-br.bin.gz`): IP geolocation by
+[DB-IP](https://db-ip.com), licença [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+Para atualizar a base, baixe o "IP to City Lite" (csv.gz) e rode
+`node geo/gerar.js dbip-city-lite-AAAA-MM.csv.gz`.
